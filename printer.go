@@ -16,7 +16,7 @@ type PrinterModule struct {
 
 func ASTPrinter() *PrinterModule { return &PrinterModule{ModuleBase: &pgs.ModuleBase{}} }
 
-func (p *PrinterModule) Name() string { return "printer" }
+func (p *PrinterModule) Name() string { return "psql" }
 
 func (p *PrinterModule) Execute(targets map[string]pgs.File, packages map[string]pgs.Package) []pgs.Artifact {
 	buf := &bytes.Buffer{}
@@ -34,13 +34,9 @@ func (p *PrinterModule) printFile(f pgs.File, buf *bytes.Buffer) {
 
 	buf.Reset()
 	v := initPrintVisitor(buf)
-	p.CheckErr(pgs.Walk(v, f), "unable to print SQL")
+	p.CheckErr(pgs.Walk(v, f), "unable to generate psql")
 
 	out := buf.String()
-
-	if ok, _ := p.Parameters().Bool("log_tree"); ok {
-		p.Logf("Proto Tree:\n%s", out)
-	}
 
 	p.AddGeneratorFile(
 		f.InputPath().SetExt(".psql").String(),
