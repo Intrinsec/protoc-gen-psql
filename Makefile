@@ -1,9 +1,10 @@
 empty :=
 space := $(empty) $(empty)
-PACKAGE := github.com/intrinsec/protoc-gen-psql
+NAME := psql
+PACKAGE := github.com/intrinsec/protoc-gen-$(NAME)
 
 # protoc-gen-go parameters for properly generating the import path for PGV
-PSQL_IMPORT := Mpsql/psql.proto=${PACKAGE}/psql
+PSQL_IMPORT := M$(NAME)/$(NAME).proto=${PACKAGE}/$(NAME)
 GO_IMPORT_SPACES := ${PSQL_IMPORT},\
 	Mgoogle/protobuf/any.proto=github.com/golang/protobuf/ptypes/any,\
 	Mgoogle/protobuf/duration.proto=github.com/golang/protobuf/ptypes/duration,\
@@ -14,20 +15,35 @@ GO_IMPORT_SPACES := ${PSQL_IMPORT},\
 GO_IMPORT:=$(subst $(space),,$(GO_IMPORT_SPACES))
 
 .PHONY: build
-build: psql/psql.pb.go
-	@GOBIN=$(shell pwd)/bin go install -v .
+build: bin/protoc-gen-$(NAME)
 
-psql/psql.pb.go: bin/protoc-gen-go psql/psql.proto
-	@cd psql && protoc -I . \
+.PHONY: install
+install: $(NAME)/$(NAME).pb.go
+	@go install -v .
+
+$(NAME)/$(NAME).pb.go: bin/protoc-gen-go $(NAME)/$(NAME).proto
+	@cd $(NAME) && protoc -I . \
 		--plugin=protoc-gen-go=$(shell pwd)/bin/protoc-gen-go \
 		--go_opt=paths=source_relative \
-		--go_out="${GO_IMPORT}:." psql.proto
+		--go_out="${GO_IMPORT}:." $(NAME).proto
 
 bin/protoc-gen-go:
-	@GOBIN=$(shell pwd)/bin go install github.com/golang/protobuf/protoc-gen-go
+	@GOBIN=$(shell pwd)/bin go install google.golang.org/protobuf/cmd/protoc-gen-go
 
+bin/protoc-gen-$(NAME): $(NAME)/$(NAME).pb.go
+	@GOBIN=$(shell pwd)/bin go install .
 
 .PHONY: test
 test: build
-	@PATH="$$(pwd)/bin:$(PATH)" protoc -I . --psql_out="." asset.proto
-	@cat asset.psql
+	@protoc -I . --plugin=protoc-gen-$(NAME)=$(shell pwd)/bin/protoc-gen-$(NAME) --$(NAME)_out="." asset.proto
+	@cat asset.$(NAME)
+
+
+.PHONY: clean
+clean:
+	@rm -fv asset.psql
+
+
+.PHONY: distclean
+distclean: clean
+	@rm -fv bin/protoc-gen-go bin/protoc-gen-$(NAME) $(NAME)/$(NAME).pb.go
