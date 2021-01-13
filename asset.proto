@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package vdi.user;
+
+import "psql/psql.proto";
+
+option go_package = "intrinsec.com/test/test/pkg/model;model";
+
+option (psql.initializations) = "-- pgcrypto used for uuid";
+option (psql.initializations) = "CREATE EXTENSION IF NOT EXISTS pgcrypto;";
+option (psql.initializations) = "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;";
+
+message Asset {
+
+    string uuid = 1 [
+        (psql.column) = "uuid PRIMARY KEY DEFAULT gen_random_uuid()"
+    ];
+
+    bool enabled = 2 [
+        (psql.column) = "boolean NOT NULL DEFAULT TRUE"
+    ];
+
+}
+
+
+message GroupsAssetAsset {
+
+    option (psql.suffixes) = "CONSTRAINT ck_no_self_loops CHECK (parent_id <> child_id)";
+    option (psql.suffixes) = "UNIQUE (parent_id, child_id)";
+    
+    string parent_id = 1 [
+        (psql.column) = "uuid REFERENCES Asset(uuid) ON DELETE CASCADE"
+    ];
+    string child_id = 2 [
+        (psql.column) = "uuid REFERENCES Asset(uuid) ON DELETE CASCADE"
+    ];
+}

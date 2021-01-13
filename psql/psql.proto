@@ -1,0 +1,25 @@
+syntax = "proto2";
+package psql;
+
+option go_package = "github.com/intrinsec/protoc-gen-psql/psql";
+
+import "google/protobuf/descriptor.proto";
+
+// Message options for sql generation
+extend google.protobuf.FileOptions {
+    repeated string initializations = 2081; 
+    repeated string finalizations = 2082; 
+}
+
+
+// Message options for sql generation
+extend google.protobuf.MessageOptions {
+    optional bool disabled = 2081;
+    repeated string prefixes = 2082; 
+    repeated string suffixes = 2083; 
+}
+
+// Field options
+extend google.protobuf.FieldOptions {
+    optional string column = 2081;
+}
