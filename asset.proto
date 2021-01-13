@@ -35,3 +35,9 @@ message GroupsAssetAsset {
         (psql.column) = "uuid REFERENCES Asset(uuid) ON DELETE CASCADE"
     ];
 }
+
+message NoSQL {
+   option (psql.disabled) = true;
+
+   string test = 1;
+}

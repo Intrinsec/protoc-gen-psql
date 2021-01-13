@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 
 	"bytes"
 
@@ -70,6 +71,7 @@ func (v PrinterVisitor) writeIndented(str string) {
 }
 
 func (v PrinterVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
+	log.Println("pssql: Processing file " + f.Name().String())
 	v.writeComment("File: " + f.Name().String())
 	v.write("")
 
@@ -100,6 +102,13 @@ func (v PrinterVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
 }
 
 func (v PrinterVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
+
+	var disabled bool
+
+	if ok, err := m.Extension(psql.E_Disabled, &disabled); ok && err == nil && disabled {
+		log.Println("pssql: Generation disabled for message " + m.Name().String())
+		return nil, nil
+	}
 
 	prefixes := make([]string, 0)
 	suffixes := make([]string, 0)
