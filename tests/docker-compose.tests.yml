@@ -6,6 +6,11 @@ services:
     container_name: pgsql
     environment:
       - POSTGRES_PASSWORD=test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 1s
+      timeout: 5s
+      retries: 5
   client:
     image: isec/psql-client:latest
     build:
@@ -15,6 +20,7 @@ services:
       - PGPASSWORD=test
     volumes:
       - ./:/sql/
-    entrypoint: psql -U postgres -h db -p 5432 -a -f /sql/asset.psql
+    entrypoint: psql -v "ON_ERROR_STOP=1" -U postgres -h db -p 5432 -a -f /sql/asset.psql
     depends_on:
-      - db
+      db:
+        condition: service_healthy
