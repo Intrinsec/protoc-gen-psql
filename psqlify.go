@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 
 	"bytes"
 
@@ -11,13 +12,15 @@ import (
 	pgs "github.com/lyft/protoc-gen-star"
 )
 
-// PSQLModule implement a custom protoc-gen-star module 
+// PSQLModule implement a custom protoc-gen-star module
 type PSQLModule struct {
 	*pgs.ModuleBase
 }
 
 // PSQLify returns and initialized PSQLify module
-func PSQLify() *PSQLModule { return &PSQLModule{ModuleBase: &pgs.ModuleBase{}} }
+func PSQLify() *PSQLModule {
+	return &PSQLModule{ModuleBase: &pgs.ModuleBase{}}
+}
 
 // Name define the name of the protoc module
 func (p *PSQLModule) Name() string { return "psql" }
@@ -53,32 +56,40 @@ func (p *PSQLModule) printFile(f pgs.File, buf *bytes.Buffer) {
 // (File, Messages, Fields, options)
 type PSQLVisitor struct {
 	pgs.Visitor
-	w io.Writer
+	w           io.Writer
+	definitions []string
 }
 
 func initPSQLVisitor(w io.Writer) pgs.Visitor {
 	v := PSQLVisitor{
-		w: w,
+		w:           w,
+		definitions: []string{},
 	}
 	v.Visitor = pgs.PassThroughVisitor(&v)
-	return v
+	return &v
 }
 
-func (v PSQLVisitor) writeComment(str string) {
+func (v *PSQLVisitor) writeComment(str string) {
 	fmt.Fprintf(v.w, "-- %s\n", str)
 }
 
-func (v PSQLVisitor) write(str string) {
+func (v *PSQLVisitor) write(str string) {
 	fmt.Fprintf(v.w, "%s\n", str)
 }
 
-func (v PSQLVisitor) writeIndented(str string) {
-	fmt.Fprintf(v.w, "\t%s,\n", str)
+func (v *PSQLVisitor) appendDefinition(str string) {
+	v.definitions = append(v.definitions, str)
+	log.Printf("appendDefinition: defs = %v+", v.definitions)
+}
+func (v *PSQLVisitor) writeDefinition() {
+	log.Printf("writeDefinition: defs = %v+", v.definitions)
+	fmt.Fprintf(v.w, "\t%s\n", strings.Join(v.definitions, ",\n\t"))
+	v.definitions = []string{}
 }
 
 // VisitFile prepare a .psql from a proto one
 // For each messages, call VisitMessage
-func (v PSQLVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
+func (v *PSQLVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
 	log.Println("pssql: Processing file " + f.Name().String())
 	v.writeComment("File: " + f.Name().String())
 	v.write("")
@@ -111,7 +122,7 @@ func (v PSQLVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
 
 // VisitMessage extract psql related options of a messages and generate associated statements
 // For each fields, call VisitField
-func (v PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
+func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 
 	var disabled bool
 
@@ -127,7 +138,7 @@ func (v PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 
 	if ok, err := m.Extension(psql.E_Prefixes, &prefixes); ok && err == nil {
 		for _, prefix := range prefixes {
-			v.writeIndented(prefix)
+			v.appendDefinition(prefix)
 		}
 	}
 
@@ -137,23 +148,23 @@ func (v PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 
 	if ok, err := m.Extension(psql.E_Suffixes, &suffixes); ok && err == nil {
 		for _, suffix := range suffixes {
-			v.writeIndented(suffix)
+			v.appendDefinition(suffix)
 		}
 	}
-
+	v.writeDefinition()
 	v.write(");")
 
 	return nil, nil
 }
 
 // VisitField extract psql related options of a field and generate associated statements
-func (v PSQLVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
+func (v *PSQLVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
 
 	var column string
 
 	ok, err := f.Extension(psql.E_Column, &column)
 	if ok && err == nil {
-		v.writeIndented(f.Name().String() + " " + column)
+		v.appendDefinition(f.Name().String() + " " + column)
 	} else {
 		v.writeComment("Ignored Field: " + f.Name().String())
 	}
