@@ -37,6 +37,11 @@ bin/protoc-gen-$(NAME): $(NAME)/$(NAME).pb.go $(wildcard *.go)
 test: build
 	@protoc -I . --plugin=protoc-gen-$(NAME)=$(shell pwd)/bin/protoc-gen-$(NAME) --$(NAME)_out="." tests/asset.proto
 	@cat tests/asset.$(NAME)
+	docker-compose -f ./tests/docker-compose.tests.yml up -d db
+	docker-compose -f ./tests/docker-compose.tests.yml up client
+	docker-compose -f ./tests/docker-compose.tests.yml down
+	docker-compose -f ./tests/docker-compose.tests.yml rm
+
 
 
 .PHONY: clean
@@ -47,3 +52,4 @@ clean:
 .PHONY: distclean
 distclean: clean
 	@rm -fv bin/protoc-gen-go bin/protoc-gen-$(NAME) $(NAME)/$(NAME).pb.go
+
