@@ -8,7 +8,7 @@ import (
 func main() {
 	pgs.
 		Init(pgs.DebugEnv("DEBUG_PGV")).
-		RegisterModule(ASTPrinter()).
+		RegisterModule(PSQLify()).
 		RegisterPostProcessor(pgsgo.GoFmt()).
 		Render()
 }

@@ -11,15 +11,15 @@ import (
 	pgs "github.com/lyft/protoc-gen-star"
 )
 
-type PrinterModule struct {
+type PSQLModule struct {
 	*pgs.ModuleBase
 }
 
-func ASTPrinter() *PrinterModule { return &PrinterModule{ModuleBase: &pgs.ModuleBase{}} }
+func PSQLify() *PSQLModule { return &PSQLModule{ModuleBase: &pgs.ModuleBase{}} }
 
-func (p *PrinterModule) Name() string { return "psql" }
+func (p *PSQLModule) Name() string { return "psql" }
 
-func (p *PrinterModule) Execute(targets map[string]pgs.File, packages map[string]pgs.Package) []pgs.Artifact {
+func (p *PSQLModule) Execute(targets map[string]pgs.File, packages map[string]pgs.Package) []pgs.Artifact {
 	buf := &bytes.Buffer{}
 
 	for _, f := range targets {
@@ -29,12 +29,12 @@ func (p *PrinterModule) Execute(targets map[string]pgs.File, packages map[string
 	return p.Artifacts()
 }
 
-func (p *PrinterModule) printFile(f pgs.File, buf *bytes.Buffer) {
+func (p *PSQLModule) printFile(f pgs.File, buf *bytes.Buffer) {
 	p.Push(f.Name().String())
 	defer p.Pop()
 
 	buf.Reset()
-	v := initPrintVisitor(buf)
+	v := initPSQLVisitor(buf)
 	p.CheckErr(pgs.Walk(v, f), "unable to generate psql")
 
 	out := buf.String()
@@ -45,32 +45,32 @@ func (p *PrinterModule) printFile(f pgs.File, buf *bytes.Buffer) {
 	)
 }
 
-type PrinterVisitor struct {
+type PSQLVisitor struct {
 	pgs.Visitor
 	w io.Writer
 }
 
-func initPrintVisitor(w io.Writer) pgs.Visitor {
-	v := PrinterVisitor{
+func initPSQLVisitor(w io.Writer) pgs.Visitor {
+	v := PSQLVisitor{
 		w: w,
 	}
 	v.Visitor = pgs.PassThroughVisitor(&v)
 	return v
 }
 
-func (v PrinterVisitor) writeComment(str string) {
+func (v PSQLVisitor) writeComment(str string) {
 	fmt.Fprintf(v.w, "-- %s\n", str)
 }
 
-func (v PrinterVisitor) write(str string) {
+func (v PSQLVisitor) write(str string) {
 	fmt.Fprintf(v.w, "%s\n", str)
 }
 
-func (v PrinterVisitor) writeIndented(str string) {
+func (v PSQLVisitor) writeIndented(str string) {
 	fmt.Fprintf(v.w, "\t%s,\n", str)
 }
 
-func (v PrinterVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
+func (v PSQLVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
 	log.Println("pssql: Processing file " + f.Name().String())
 	v.writeComment("File: " + f.Name().String())
 	v.write("")
@@ -101,7 +101,7 @@ func (v PrinterVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
 	return nil, nil
 }
 
-func (v PrinterVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
+func (v PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 
 	var disabled bool
 
@@ -136,7 +136,7 @@ func (v PrinterVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 	return nil, nil
 }
 
-func (v PrinterVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
+func (v PSQLVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
 
 	var column string
 
