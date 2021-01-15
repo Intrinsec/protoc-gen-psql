@@ -11,14 +11,18 @@ import (
 	pgs "github.com/lyft/protoc-gen-star"
 )
 
+// PSQLModule implement a custom protoc-gen-star module 
 type PSQLModule struct {
 	*pgs.ModuleBase
 }
 
+// PSQLify returns and initialized PSQLify module
 func PSQLify() *PSQLModule { return &PSQLModule{ModuleBase: &pgs.ModuleBase{}} }
 
+// Name define the name of the protoc module
 func (p *PSQLModule) Name() string { return "psql" }
 
+// Execute generates PSQL files from received proto ones
 func (p *PSQLModule) Execute(targets map[string]pgs.File, packages map[string]pgs.Package) []pgs.Artifact {
 	buf := &bytes.Buffer{}
 
@@ -45,6 +49,8 @@ func (p *PSQLModule) printFile(f pgs.File, buf *bytes.Buffer) {
 	)
 }
 
+// PSQLVisitor represent a visitor to walk the proto tree and analyse content
+// (File, Messages, Fields, options)
 type PSQLVisitor struct {
 	pgs.Visitor
 	w io.Writer
@@ -70,6 +76,8 @@ func (v PSQLVisitor) writeIndented(str string) {
 	fmt.Fprintf(v.w, "\t%s,\n", str)
 }
 
+// VisitFile prepare a .psql from a proto one
+// For each messages, call VisitMessage
 func (v PSQLVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
 	log.Println("pssql: Processing file " + f.Name().String())
 	v.writeComment("File: " + f.Name().String())
@@ -101,6 +109,8 @@ func (v PSQLVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
 	return nil, nil
 }
 
+// VisitMessage extract psql related options of a messages and generate associated statements
+// For each fields, call VisitField
 func (v PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 
 	var disabled bool
@@ -136,6 +146,7 @@ func (v PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 	return nil, nil
 }
 
+// VisitField extract psql related options of a field and generate associated statements
 func (v PSQLVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
 
 	var column string
