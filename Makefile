@@ -3,6 +3,9 @@ space := $(empty) $(empty)
 NAME := psql
 PACKAGE := github.com/intrinsec/protoc-gen-$(NAME)
 
+CI_JOB_ID ?= local
+export CI_JOB_ID
+
 # protoc-gen-go parameters for properly generating the import path for PGV
 GO_IMPORT_SPACES := M$(NAME)/$(NAME).proto=${PACKAGE}/$(NAME),\
 	Mgoogle/protobuf/any.proto=github.com/golang/protobuf/ptypes/any,\
@@ -37,10 +40,10 @@ bin/protoc-gen-$(NAME): $(NAME)/$(NAME).pb.go $(wildcard *.go)
 test: build
 	@protoc -I . --plugin=protoc-gen-$(NAME)=$(shell pwd)/bin/protoc-gen-$(NAME) --$(NAME)_out="." tests/asset.proto
 	@cat tests/asset.$(NAME)
-	docker-compose -f ./tests/docker-compose.tests.yml up -d db
-	docker-compose -f ./tests/docker-compose.tests.yml up client
-	docker-compose -f ./tests/docker-compose.tests.yml down
-	docker-compose -f ./tests/docker-compose.tests.yml rm
+	docker-compose -p $(NAME)-$(CI_JOB_ID) -f ./tests/docker-compose.tests.yml up -d db
+	docker-compose -p $(NAME)-$(CI_JOB_ID) -f ./tests/docker-compose.tests.yml up client
+	docker-compose -p $(NAME)-$(CI_JOB_ID) -f ./tests/docker-compose.tests.yml down
+	docker-compose -p $(NAME)-$(CI_JOB_ID) -f ./tests/docker-compose.tests.yml rm
 
 
 
