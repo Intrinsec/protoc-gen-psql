@@ -9,6 +9,15 @@ option go_package = "intrinsec.com/test/test/pkg/model;model";
 option (psql.initializations) = "-- pgcrypto used for uuid";
 option (psql.initializations) = "CREATE EXTENSION IF NOT EXISTS pgcrypto;";
 option (psql.initializations) = "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;";
+option (psql.initializations) = "CREATE EXTENSION IF NOT EXISTS dblink;";
+
+// Create DB if it do not exists
+option (psql.initializations) = "DO $$";
+option (psql.initializations) = "BEGIN";
+option (psql.initializations) = "PERFORM dblink_exec('', 'CREATE DATABASE testdb');";
+option (psql.initializations) = "EXCEPTION WHEN duplicate_database THEN RAISE NOTICE '%, skipping', SQLERRM USING ERRCODE = SQLSTATE;";
+option (psql.initializations) = "END";
+option (psql.initializations) = "$$;";
 
 message Asset {
 

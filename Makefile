@@ -4,8 +4,7 @@ NAME := psql
 PACKAGE := github.com/intrinsec/protoc-gen-$(NAME)
 
 # protoc-gen-go parameters for properly generating the import path for PGV
-PSQL_IMPORT := M$(NAME)/$(NAME).proto=${PACKAGE}/$(NAME)
-GO_IMPORT_SPACES := ${PSQL_IMPORT},\
+GO_IMPORT_SPACES := M$(NAME)/$(NAME).proto=${PACKAGE}/$(NAME),\
 	Mgoogle/protobuf/any.proto=github.com/golang/protobuf/ptypes/any,\
 	Mgoogle/protobuf/duration.proto=github.com/golang/protobuf/ptypes/duration,\
 	Mgoogle/protobuf/struct.proto=github.com/golang/protobuf/ptypes/struct,\
@@ -36,8 +35,8 @@ bin/protoc-gen-$(NAME): $(NAME)/$(NAME).pb.go $(wildcard *.go)
 
 .PHONY: test
 test: build
-	@protoc -I . --plugin=protoc-gen-$(NAME)=$(shell pwd)/bin/protoc-gen-$(NAME) --$(NAME)_out="." asset.proto
-	@cat asset.$(NAME)
+	@protoc -I . --plugin=protoc-gen-$(NAME)=$(shell pwd)/bin/protoc-gen-$(NAME) --$(NAME)_out="." tests/asset.proto
+	@cat tests/asset.$(NAME)
 
 
 .PHONY: clean
