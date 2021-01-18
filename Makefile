@@ -38,13 +38,13 @@ bin/protoc-gen-$(NAME): $(NAME)/$(NAME).pb.go $(wildcard *.go)
 
 
 .PHONY: test-generate
-test-generate:
+test-generate: build
 	@protoc -I . --plugin=protoc-gen-$(NAME)=$(shell pwd)/bin/protoc-gen-$(NAME) --$(NAME)_out="." tests/asset.proto
 	@cat tests/asset.$(NAME)
 
 
 .PHONY: test-integration
-test-integration:
+test-integration: build
 	docker-compose -p $(NAME)-$(CI_JOB_ID) -f ./tests/docker-compose.tests.yml rm -f
 	docker-compose -p $(NAME)-$(CI_JOB_ID) -f ./tests/docker-compose.tests.yml up --exit-code-from=client
 	docker-compose -p $(NAME)-$(CI_JOB_ID) -f ./tests/docker-compose.tests.yml down -v
