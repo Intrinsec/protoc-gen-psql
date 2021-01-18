@@ -34,12 +34,12 @@ message Asset {
 
 message GroupsAssetAsset {
 
-    option (psql.suffixes) = "CONSTRAINT ck_no_self_loops CHECK (parent_id <> child_id)";
-    option (psql.suffixes) = "UNIQUE (parent_id, child_id)";
-    
+    option (psql.constraints) = "CONSTRAINT ck_no_self_loops CHECK (parent_id <> child_id)";
+
     string parent_id = 1 [
         (psql.column) = "uuid REFERENCES Asset(uuid) ON DELETE CASCADE"
-    ];
+        ];
+    option (psql.constraints) = "UNIQUE (parent_id, child_id)";
     string child_id = 2 [
         (psql.column) = "uuid REFERENCES Asset(uuid) ON DELETE CASCADE"
     ];

@@ -36,6 +36,7 @@ func (p *PSQLModule) Execute(targets map[string]pgs.File, packages map[string]pg
 	return p.Artifacts()
 }
 
+// generateFile generate a psql file from a buffer content
 func (p *PSQLModule) generateFile(f pgs.File, buf *bytes.Buffer) {
 	p.Push(f.Name().String())
 	defer p.Pop()
@@ -77,13 +78,34 @@ func (v *PSQLVisitor) write(str string) {
 	fmt.Fprintf(v.w, "%s\n", str)
 }
 
+// appendDefinition append a full independent SQL statement without any formatting
 func (v *PSQLVisitor) appendDefinition(str string) {
 	v.definitions = append(v.definitions, str)
 	log.Printf("appendDefinition: defs = %v+", v.definitions)
 }
+
+// appendColumn append a column col to a table t
+func (v *PSQLVisitor) appendColumn(t string, col string) {
+	def := "ALTER TABLE " + t + " ADD COLUMN IF NOT EXISTS " + col + ";\n"
+
+	v.definitions = append(v.definitions, def)
+}
+
+// appendConstraint append a constraint str to a table t
+func (v *PSQLVisitor) appendConstraint(t string, str string) {
+	cs := "DO $$\n" +
+		"BEGIN\n" +
+		"ALTER TABLE " + t + " ADD " + str + ";\n" +
+		"EXCEPTION WHEN duplicate_object THEN RAISE NOTICE '%, skipping', SQLERRM USING ERRCODE = SQLSTATE;\n" +
+		"END\n" +
+		"$$;\n"
+	v.definitions = append(v.definitions, cs)
+}
+
+// writeDefinition write definitions to a file then clear definitions
 func (v *PSQLVisitor) writeDefinition() {
 	log.Printf("writeDefinition: defs = %v+", v.definitions)
-	fmt.Fprintf(v.w, "\t%s\n", strings.Join(v.definitions, ",\n\t"))
+	fmt.Fprintf(v.w, "%s\n", strings.Join(v.definitions, "\n"))
 	v.definitions = []string{}
 }
 
@@ -133,8 +155,9 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 
 	prefixes := make([]string, 0)
 	suffixes := make([]string, 0)
+	constraints := make([]string, 0)
 
-	v.write("CREATE TABLE IF NOT EXISTS " + m.Name().String() + " (")
+	v.write("CREATE TABLE IF NOT EXISTS " + m.Name().String() + " ();\n")
 
 	if ok, err := m.Extension(psql.E_Prefixes, &prefixes); ok && err == nil {
 		for _, prefix := range prefixes {
@@ -146,13 +169,18 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 		pgs.Walk(v, field)
 	}
 
+	if ok, err := m.Extension(psql.E_Constraints, &constraints); ok && err == nil {
+		for _, constraint := range constraints {
+			v.appendConstraint(m.Name().String(), constraint)
+		}
+	}
+
 	if ok, err := m.Extension(psql.E_Suffixes, &suffixes); ok && err == nil {
 		for _, suffix := range suffixes {
 			v.appendDefinition(suffix)
 		}
 	}
 	v.writeDefinition()
-	v.write(");")
 
 	return nil, nil
 }
@@ -164,7 +192,8 @@ func (v *PSQLVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
 
 	ok, err := f.Extension(psql.E_Column, &column)
 	if ok && err == nil {
-		v.appendDefinition(f.Name().String() + " " + column)
+		v.appendColumn(f.Message().Name().String(), f.Name().String()+" "+column)
+
 	} else {
 		v.writeComment("Ignored Field: " + f.Name().String())
 	}
