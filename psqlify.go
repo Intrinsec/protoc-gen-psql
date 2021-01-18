@@ -42,7 +42,12 @@ func (p *PSQLModule) generateFile(f pgs.File, buf *bytes.Buffer) {
 	defer p.Pop()
 
 	buf.Reset()
-	v := initPSQLVisitor(buf)
+
+	alter := false
+	if ok, _ := p.Parameters().Bool("alter"); ok {
+		alter = true
+	}
+	v := initPSQLVisitor(buf, alter)
 	p.CheckErr(pgs.Walk(v, f), "unable to generate psql")
 
 	out := buf.String()
@@ -59,12 +64,14 @@ type PSQLVisitor struct {
 	pgs.Visitor
 	w           io.Writer
 	definitions []string
+	alter      bool
 }
 
-func initPSQLVisitor(w io.Writer) pgs.Visitor {
+func initPSQLVisitor(w io.Writer, alter bool) pgs.Visitor {
 	v := PSQLVisitor{
 		w:           w,
 		definitions: []string{},
+		alter:      alter,
 	}
 	v.Visitor = pgs.PassThroughVisitor(&v)
 	return &v
@@ -75,7 +82,25 @@ func (v *PSQLVisitor) writeComment(str string) {
 }
 
 func (v *PSQLVisitor) write(str string) {
+	fmt.Fprintf(v.w, "%s", str)
+}
+
+func (v *PSQLVisitor) writeln(str string) {
 	fmt.Fprintf(v.w, "%s\n", str)
+}
+
+// createTable start a statement to create a table
+func (v *PSQLVisitor) createTable(str string) {
+	v.write("CREATE TABLE IF NOT EXISTS " + str + " (")
+
+	var strEnd string
+	if v.alter {
+		strEnd = ");"
+	} else {
+		strEnd = ""
+	}
+
+	v.writeln(strEnd)
 }
 
 // appendDefinition append a full independent SQL statement without any formatting
@@ -86,26 +111,41 @@ func (v *PSQLVisitor) appendDefinition(str string) {
 
 // appendColumn append a column col to a table t
 func (v *PSQLVisitor) appendColumn(t string, col string) {
-	def := "ALTER TABLE " + t + " ADD COLUMN IF NOT EXISTS " + col + ";\n"
+	var def string
+	if v.alter {
+		def = "ALTER TABLE " + t + " ADD COLUMN IF NOT EXISTS " + col + ";\n"
+	} else {
+		def = col
+	}
 
 	v.definitions = append(v.definitions, def)
 }
 
 // appendConstraint append a constraint str to a table t
 func (v *PSQLVisitor) appendConstraint(t string, str string) {
-	cs := "DO $$\n" +
-		"BEGIN\n" +
-		"ALTER TABLE " + t + " ADD " + str + ";\n" +
-		"EXCEPTION WHEN duplicate_object THEN RAISE NOTICE '%, skipping', SQLERRM USING ERRCODE = SQLSTATE;\n" +
-		"END\n" +
-		"$$;\n"
+
+	var cs string
+	if v.alter {
+		cs = "DO $$\n" +
+			"BEGIN\n" +
+			"ALTER TABLE " + t + " ADD " + str + ";\n" +
+			"EXCEPTION WHEN duplicate_object THEN RAISE NOTICE '%, skipping', SQLERRM USING ERRCODE = SQLSTATE;\n" +
+			"END\n" +
+			"$$;\n"
+	} else {
+		cs = str
+	}
 	v.definitions = append(v.definitions, cs)
 }
 
 // writeDefinition write definitions to a file then clear definitions
 func (v *PSQLVisitor) writeDefinition() {
 	log.Printf("writeDefinition: defs = %v+", v.definitions)
-	fmt.Fprintf(v.w, "%s\n", strings.Join(v.definitions, "\n"))
+	if v.alter {
+		fmt.Fprintf(v.w, "%s\n", strings.Join(v.definitions, "\n"))
+	} else {
+		fmt.Fprintf(v.w, "\t%s\n", strings.Join(v.definitions, ",\n\t"))
+	}
 	v.definitions = []string{}
 }
 
@@ -113,6 +153,7 @@ func (v *PSQLVisitor) writeDefinition() {
 // For each messages, call VisitMessage
 func (v *PSQLVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
 	log.Println("pssql: Processing file " + f.Name().String())
+	log.Println("Param: alter " + fmt.Sprintf("%v", v.alter))
 	v.writeComment("File: " + f.Name().String())
 	v.write("")
 
@@ -121,21 +162,21 @@ func (v *PSQLVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
 
 	if ok, err := f.Extension(psql.E_Initializations, &initializations); ok && err == nil {
 		for _, init := range initializations {
-			v.write(init)
+			v.writeln(init)
 		}
 	}
 
-	v.write("")
+	v.writeln("")
 
 	for _, message := range f.AllMessages() {
 		pgs.Walk(v, message)
 	}
 
-	v.write("")
+	v.writeln("")
 
 	if ok, err := f.Extension(psql.E_Finalizations, &finalizations); ok && err == nil {
 		for _, finit := range finalizations {
-			v.write(finit)
+			v.writeln(finit)
 		}
 	}
 
@@ -157,7 +198,7 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 	suffixes := make([]string, 0)
 	constraints := make([]string, 0)
 
-	v.write("CREATE TABLE IF NOT EXISTS " + m.Name().String() + " ();\n")
+	v.createTable(m.Name().String())
 
 	if ok, err := m.Extension(psql.E_Prefixes, &prefixes); ok && err == nil {
 		for _, prefix := range prefixes {
@@ -181,6 +222,11 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 		}
 	}
 	v.writeDefinition()
+
+	// close the CREATE TABLE statement properly if we are not in "alter" mode
+	if !v.alter {
+		v.writeln(");")
+	}
 
 	return nil, nil
 }
