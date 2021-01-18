@@ -30,13 +30,13 @@ func (p *PSQLModule) Execute(targets map[string]pgs.File, packages map[string]pg
 	buf := &bytes.Buffer{}
 
 	for _, f := range targets {
-		p.printFile(f, buf)
+		p.generateFile(f, buf)
 	}
 
 	return p.Artifacts()
 }
 
-func (p *PSQLModule) printFile(f pgs.File, buf *bytes.Buffer) {
+func (p *PSQLModule) generateFile(f pgs.File, buf *bytes.Buffer) {
 	p.Push(f.Name().String())
 	defer p.Pop()
 
