@@ -4,9 +4,9 @@ PGP is a protoc plugin to generate postgesql statement from protobuf files.
 
 This project uses [protoc-gen-star](https://github.com/lyft/protoc-gen-star) to ease code generation.
 
-See `./tests/asset.proto` for example on how to use it.
-
 ## How to use it
+
+See `./tests/asset.proto` for example on how to use it.
 
 Two modes are available and may be chosen by adding `alter` as a parameter in protoc command line like `--psql_out="alter:."`
 
@@ -16,3 +16,5 @@ Two modes are available and may be chosen by adding `alter` as a parameter in pr
 ## Tests
 
 Do a `make test-generate` to view a code generated example.
+
+To test the generate psql code, do a `make test`.
