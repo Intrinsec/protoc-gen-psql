@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"log"
 	"strings"
 
 	"bytes"
@@ -47,7 +46,8 @@ func (p *PSQLModule) generateFile(f pgs.File, buf *bytes.Buffer) {
 	if ok, _ := p.Parameters().Bool("alter"); ok {
 		alter = true
 	}
-	v := initPSQLVisitor(buf, alter)
+	p.Debug("Param: alter=" + fmt.Sprintf("%v", alter))
+	v := initPSQLVisitor(p, buf, alter)
 	p.CheckErr(pgs.Walk(v, f), "unable to generate psql")
 
 	out := buf.String()
@@ -62,16 +62,18 @@ func (p *PSQLModule) generateFile(f pgs.File, buf *bytes.Buffer) {
 // (File, Messages, Fields, options)
 type PSQLVisitor struct {
 	pgs.Visitor
+	pgs.DebuggerCommon
 	w           io.Writer
 	definitions []string
-	alter      bool
+	alter       bool
 }
 
-func initPSQLVisitor(w io.Writer, alter bool) pgs.Visitor {
+func initPSQLVisitor(d pgs.DebuggerCommon, w io.Writer, alter bool) pgs.Visitor {
 	v := PSQLVisitor{
-		w:           w,
-		definitions: []string{},
-		alter:      alter,
+		w:              w,
+		DebuggerCommon: d,
+		definitions:    []string{},
+		alter:          alter,
 	}
 	v.Visitor = pgs.PassThroughVisitor(&v)
 	return &v
@@ -106,7 +108,7 @@ func (v *PSQLVisitor) createTable(str string) {
 // appendDefinition append a full independent SQL statement without any formatting
 func (v *PSQLVisitor) appendDefinition(str string) {
 	v.definitions = append(v.definitions, str)
-	log.Printf("appendDefinition: defs = %v+", v.definitions)
+	v.Debug("appendDefinition: defs = %v+", v.definitions)
 }
 
 // appendColumn append a column col to a table t
@@ -123,7 +125,6 @@ func (v *PSQLVisitor) appendColumn(t string, col string) {
 
 // appendConstraint append a constraint str to a table t
 func (v *PSQLVisitor) appendConstraint(t string, str string) {
-
 	var cs string
 	if v.alter {
 		cs = "DO $$\n" +
@@ -140,7 +141,7 @@ func (v *PSQLVisitor) appendConstraint(t string, str string) {
 
 // writeDefinition write definitions to a file then clear definitions
 func (v *PSQLVisitor) writeDefinition() {
-	log.Printf("writeDefinition: defs = %v+", v.definitions)
+	v.Debug("writeDefinition: defs = %v+", v.definitions)
 	if v.alter {
 		fmt.Fprintf(v.w, "%s\n", strings.Join(v.definitions, "\n"))
 	} else {
@@ -152,8 +153,7 @@ func (v *PSQLVisitor) writeDefinition() {
 // VisitFile prepare a .psql from a proto one
 // For each messages, call VisitMessage
 func (v *PSQLVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
-	log.Println("pssql: Processing file " + f.Name().String())
-	log.Println("Param: alter " + fmt.Sprintf("%v", v.alter))
+	v.Debug("pssql: Processing file " + f.Name().String())
 	v.writeComment("File: " + f.Name().String())
 	v.write("")
 
@@ -186,11 +186,10 @@ func (v *PSQLVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
 // VisitMessage extract psql related options of a messages and generate associated statements
 // For each fields, call VisitField
 func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
-
 	var disabled bool
 
 	if ok, err := m.Extension(psql.E_Disabled, &disabled); ok && err == nil && disabled {
-		log.Println("pssql: Generation disabled for message " + m.Name().String())
+		v.Logf("pssql: Generation disabled for message " + m.Name().String())
 		return nil, nil
 	}
 
@@ -233,7 +232,6 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 
 // VisitField extract psql related options of a field and generate associated statements
 func (v *PSQLVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
-
 	var column string
 
 	ok, err := f.Extension(psql.E_Column, &column)
