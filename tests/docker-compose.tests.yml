@@ -20,7 +20,6 @@ services:
       - PGPASSWORD=test
     volumes:
       - ./:/sql/
-    entrypoint: psql -v "ON_ERROR_STOP=1" -U postgres -h db -p 5432 -a -f /sql/asset.psql
     depends_on:
       db:
         condition: service_healthy

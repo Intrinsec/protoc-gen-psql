@@ -5,19 +5,28 @@ option go_package = "github.com/intrinsec/protoc-gen-psql/psql";
 
 import "google/protobuf/descriptor.proto";
 
+
+// Table type enum
+enum  TableType {
+    DATA = 0;
+    RELATION = 1;
+}
+
+
 // Message options for sql generation
 extend google.protobuf.FileOptions {
-    repeated string initializations = 2081;
-    repeated string finalizations = 2082;
+    repeated string initialization = 2081;
+    repeated string finalization = 2082;
 }
 
 
 // Message options for sql generation
 extend google.protobuf.MessageOptions {
     optional bool disabled = 2081;
-    repeated string prefixes = 2082;
-    repeated string suffixes = 2083;
-    repeated string constraints = 2084;
+    repeated string prefix = 2082;
+    repeated string suffix = 2083;
+    repeated string constraint = 2084;
+    optional TableType tableType = 2085;
 }
 
 // Field options

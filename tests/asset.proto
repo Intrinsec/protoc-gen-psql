@@ -6,21 +6,17 @@ import "psql/psql.proto";
 
 option go_package = "intrinsec.com/test/test/pkg/model;model";
 
-option (psql.initializations) = "-- pgcrypto used for uuid";
-option (psql.initializations) = "CREATE EXTENSION IF NOT EXISTS pgcrypto;";
-option (psql.initializations) = "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;";
-option (psql.initializations) = "CREATE EXTENSION IF NOT EXISTS dblink;";
+option (psql.initialization) = "-- pgcrypto used for uuid";
+option (psql.initialization) = "CREATE EXTENSION IF NOT EXISTS pgcrypto;";
+option (psql.initialization) = "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;";
+option (psql.initialization) = "CREATE EXTENSION IF NOT EXISTS dblink;";
 
 // Create DB if it do not exists
-option (psql.initializations) = "DO $$";
-option (psql.initializations) = "BEGIN";
-option (psql.initializations) = "PERFORM dblink_exec('', 'CREATE DATABASE testdb');";
-option (psql.initializations) = "EXCEPTION WHEN duplicate_database THEN RAISE NOTICE '%, skipping', SQLERRM USING ERRCODE = SQLSTATE;";
-option (psql.initializations) = "END";
-option (psql.initializations) = "$$;";
+option (psql.initialization) = "CREATE DATABASE testdb;";
 
 message Asset {
 
+    option (psql.tableType) = DATA;
     string uuid = 1 [
         (psql.column) = "uuid PRIMARY KEY DEFAULT gen_random_uuid()"
     ];
@@ -34,12 +30,13 @@ message Asset {
 
 message GroupsAssetAsset {
 
-    option (psql.constraints) = "CONSTRAINT ck_no_self_loops CHECK (parent_id <> child_id)";
+    option (psql.tableType) = RELATION;
+    option (psql.constraint) = "CONSTRAINT ck_no_self_loops CHECK (parent_id <> child_id)";
 
     string parent_id = 1 [
         (psql.column) = "uuid REFERENCES Asset(uuid) ON DELETE CASCADE"
         ];
-    option (psql.constraints) = "UNIQUE (parent_id, child_id)";
+    option (psql.constraint) = "UNIQUE (parent_id, child_id)";
     string child_id = 2 [
         (psql.column) = "uuid REFERENCES Asset(uuid) ON DELETE CASCADE"
     ];
