@@ -26,35 +26,64 @@ func (p *PSQLModule) Name() string { return "psql" }
 
 // Execute generates PSQL files from received proto ones
 func (p *PSQLModule) Execute(targets map[string]pgs.File, packages map[string]pgs.Package) []pgs.Artifact {
-	buf := &bytes.Buffer{}
+	bufInit := &bytes.Buffer{}
+	bufFinal := &bytes.Buffer{}
+	bufDataTable := &bytes.Buffer{}
+	bufRelationTable := &bytes.Buffer{}
 
 	for _, f := range targets {
-		p.generateFile(f, buf)
+		p.generateFiles(f, bufInit, bufFinal, bufDataTable, bufRelationTable)
 	}
 
 	return p.Artifacts()
 }
 
-// generateFile generate a psql file from a buffer content
-func (p *PSQLModule) generateFile(f pgs.File, buf *bytes.Buffer) {
+// generateFiles generate psql files from buffer contents
+func (p *PSQLModule) generateFiles(
+	f pgs.File,
+	bufInit *bytes.Buffer,
+	bufFinal *bytes.Buffer,
+	bufDataTable *bytes.Buffer,
+	bufRelationTable *bytes.Buffer,
+) {
 	p.Push(f.Name().String())
 	defer p.Pop()
 
-	buf.Reset()
+	bufInit.Reset()
+	bufFinal.Reset()
+	bufDataTable.Reset()
+	bufRelationTable.Reset()
 
 	alter := false
 	if ok, _ := p.Parameters().Bool("alter"); ok {
 		alter = true
 	}
 	p.Debug("Param: alter=" + fmt.Sprintf("%v", alter))
-	v := initPSQLVisitor(p, buf, alter)
+
+	v := initPSQLVisitor(p, bufInit, bufFinal, bufDataTable, bufRelationTable, alter)
 	p.CheckErr(pgs.Walk(v, f), "unable to generate psql")
 
-	out := buf.String()
+	outInit := bufInit.String()
+	outFinal := bufFinal.String()
+	outTables := bufDataTable.String()
+	outRelations := bufRelationTable.String()
 
+	outName := f.InputPath().BaseName() + ".pb.psql"
 	p.AddGeneratorFile(
-		f.InputPath().SetExt(".psql").String(),
-		out,
+		f.InputPath().SetBase("00_init_").String()+outName,
+		outInit,
+	)
+	p.AddGeneratorFile(
+		f.InputPath().SetBase("99_final_").String()+outName,
+		outFinal,
+	)
+	p.AddGeneratorFile(
+		f.InputPath().SetBase("10_tables_").String()+outName,
+		outTables,
+	)
+	p.AddGeneratorFile(
+		f.InputPath().SetBase("20_relations_").String()+outName,
+		outRelations,
 	)
 }
 
@@ -63,14 +92,27 @@ func (p *PSQLModule) generateFile(f pgs.File, buf *bytes.Buffer) {
 type PSQLVisitor struct {
 	pgs.Visitor
 	pgs.DebuggerCommon
-	w           io.Writer
-	definitions []string
-	alter       bool
+	initW          io.Writer
+	finalW         io.Writer
+	dataTableW     io.Writer
+	relationTableW io.Writer
+	definitions    []string
+	alter          bool
 }
 
-func initPSQLVisitor(d pgs.DebuggerCommon, w io.Writer, alter bool) pgs.Visitor {
+func initPSQLVisitor(
+	d pgs.DebuggerCommon,
+	initW io.Writer,
+	finalW io.Writer,
+	dataTableW io.Writer,
+	relationTableW io.Writer,
+	alter bool,
+) pgs.Visitor {
 	v := PSQLVisitor{
-		w:              w,
+		initW:          initW,
+		finalW:         finalW,
+		dataTableW:     dataTableW,
+		relationTableW: relationTableW,
 		DebuggerCommon: d,
 		definitions:    []string{},
 		alter:          alter,
@@ -79,21 +121,21 @@ func initPSQLVisitor(d pgs.DebuggerCommon, w io.Writer, alter bool) pgs.Visitor 
 	return &v
 }
 
-func (v *PSQLVisitor) writeComment(str string) {
-	fmt.Fprintf(v.w, "-- %s\n", str)
+func writeComment(w io.Writer, str string) {
+	fmt.Fprintf(w, "-- %s\n", str)
 }
 
-func (v *PSQLVisitor) write(str string) {
-	fmt.Fprintf(v.w, "%s", str)
+func write(w io.Writer, str string) {
+	fmt.Fprintf(w, "%s", str)
 }
 
-func (v *PSQLVisitor) writeln(str string) {
-	fmt.Fprintf(v.w, "%s\n", str)
+func writeln(w io.Writer, str string) {
+	fmt.Fprintf(w, "%s\n", str)
 }
 
 // createTable start a statement to create a table
-func (v *PSQLVisitor) createTable(str string) {
-	v.write("CREATE TABLE IF NOT EXISTS " + str + " (")
+func (v *PSQLVisitor) createTable(w io.Writer, str string) {
+	write(w, "CREATE TABLE IF NOT EXISTS "+str+" (")
 
 	var strEnd string
 	if v.alter {
@@ -102,7 +144,7 @@ func (v *PSQLVisitor) createTable(str string) {
 		strEnd = ""
 	}
 
-	v.writeln(strEnd)
+	writeln(w, strEnd)
 }
 
 // appendDefinition append a full independent SQL statement without any formatting
@@ -140,12 +182,12 @@ func (v *PSQLVisitor) appendConstraint(t string, str string) {
 }
 
 // writeDefinition write definitions to a file then clear definitions
-func (v *PSQLVisitor) writeDefinition() {
+func (v *PSQLVisitor) writeDefinition(w io.Writer) {
 	v.Debug("writeDefinition: defs = %v+", v.definitions)
 	if v.alter {
-		fmt.Fprintf(v.w, "%s\n", strings.Join(v.definitions, "\n"))
+		fmt.Fprintf(w, "%s\n", strings.Join(v.definitions, "\n"))
 	} else {
-		fmt.Fprintf(v.w, "\t%s\n", strings.Join(v.definitions, ",\n\t"))
+		fmt.Fprintf(w, "\t%s\n", strings.Join(v.definitions, ",\n\t"))
 	}
 	v.definitions = []string{}
 }
@@ -154,29 +196,25 @@ func (v *PSQLVisitor) writeDefinition() {
 // For each messages, call VisitMessage
 func (v *PSQLVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
 	v.Debug("pssql: Processing file " + f.Name().String())
-	v.writeComment("File: " + f.Name().String())
-	v.write("")
+	writeComment(v.initW, "File: "+f.Name().String())
+	write(v.initW, "")
 
 	initializations := make([]string, 0)
 	finalizations := make([]string, 0)
 
-	if ok, err := f.Extension(psql.E_Initializations, &initializations); ok && err == nil {
+	if ok, err := f.Extension(psql.E_Initialization, &initializations); ok && err == nil {
 		for _, init := range initializations {
-			v.writeln(init)
+			writeln(v.initW, init)
 		}
 	}
-
-	v.writeln("")
 
 	for _, message := range f.AllMessages() {
 		pgs.Walk(v, message)
 	}
 
-	v.writeln("")
-
-	if ok, err := f.Extension(psql.E_Finalizations, &finalizations); ok && err == nil {
-		for _, finit := range finalizations {
-			v.writeln(finit)
+	if ok, err := f.Extension(psql.E_Finalization, &finalizations); ok && err == nil {
+		for _, final := range finalizations {
+			writeln(v.finalW, final)
 		}
 	}
 
@@ -187,19 +225,44 @@ func (v *PSQLVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
 // For each fields, call VisitField
 func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 	var disabled bool
+	var tableType psql.TableType
+	var w *io.Writer
 
 	if ok, err := m.Extension(psql.E_Disabled, &disabled); ok && err == nil && disabled {
-		v.Logf("pssql: Generation disabled for message " + m.Name().String())
+		v.Logf("Generation disabled for message " + m.Name().String())
 		return nil, nil
 	}
+
+	ok, err := m.Extension(psql.E_TableType, &tableType)
+	if err != nil {
+		v.Logf(err.Error())
+		return nil, nil
+	}
+
+	if !ok {
+		v.Logf("Unable to find an extension tableType equal to DATA or RELATION. Skipping message: " + m.Name().String())
+		return nil, nil
+	}
+
+	switch tableType {
+	case psql.TableType_DATA:
+		v.Debug("Table Type: DATA")
+		w = &v.dataTableW
+	case psql.TableType_RELATION:
+		v.Debug("Table Type: RELATION")
+		w = &v.relationTableW
+	default:
+		w = &v.dataTableW
+	}
+
+	writeComment(*w, "File: "+m.File().Name().String())
+	v.createTable(*w, m.Name().String())
 
 	prefixes := make([]string, 0)
 	suffixes := make([]string, 0)
 	constraints := make([]string, 0)
 
-	v.createTable(m.Name().String())
-
-	if ok, err := m.Extension(psql.E_Prefixes, &prefixes); ok && err == nil {
+	if ok, err := m.Extension(psql.E_Prefix, &prefixes); ok && err == nil {
 		for _, prefix := range prefixes {
 			v.appendDefinition(prefix)
 		}
@@ -209,22 +272,22 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 		pgs.Walk(v, field)
 	}
 
-	if ok, err := m.Extension(psql.E_Constraints, &constraints); ok && err == nil {
+	if ok, err := m.Extension(psql.E_Constraint, &constraints); ok && err == nil {
 		for _, constraint := range constraints {
 			v.appendConstraint(m.Name().String(), constraint)
 		}
 	}
 
-	if ok, err := m.Extension(psql.E_Suffixes, &suffixes); ok && err == nil {
+	if ok, err := m.Extension(psql.E_Suffix, &suffixes); ok && err == nil {
 		for _, suffix := range suffixes {
 			v.appendDefinition(suffix)
 		}
 	}
-	v.writeDefinition()
+	v.writeDefinition(*w)
 
 	// close the CREATE TABLE statement properly if we are not in "alter" mode
 	if !v.alter {
-		v.writeln(");")
+		writeln(*w, ");")
 	}
 
 	return nil, nil
@@ -238,8 +301,6 @@ func (v *PSQLVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
 	if ok && err == nil {
 		v.appendColumn(f.Message().Name().String(), f.Name().String()+" "+column)
 
-	} else {
-		v.writeComment("Ignored Field: " + f.Name().String())
 	}
 	return nil, nil
 }

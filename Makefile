@@ -39,9 +39,13 @@ bin/protoc-gen-$(NAME): $(NAME)/$(NAME).pb.go $(wildcard *.go)
 
 .PHONY: test-generate
 test-generate: build
-	@protoc -I . --plugin=protoc-gen-$(NAME)=$(shell pwd)/bin/protoc-gen-$(NAME) --$(NAME)_out="alter:." tests/asset.proto
-	@cat tests/asset.$(NAME)
+	@protoc -I . --plugin=protoc-gen-$(NAME)=$(shell pwd)/bin/protoc-gen-$(NAME) --$(NAME)_out="." tests/asset.proto
+	@cat tests/*.pb.psql
 
+
+.PHONY: build-docker
+build-docker:
+	docker-compose -p $(NAME)-$(CI_JOB_ID) -f ./tests/docker-compose.tests.yml build
 
 .PHONY: test-integration
 test-integration: build
@@ -56,7 +60,7 @@ test: build test-generate test-integration
 
 .PHONY: clean
 clean:
-	@rm -fv asset.psql
+	@rm -fv tests/*.psql
 
 
 .PHONY: distclean
