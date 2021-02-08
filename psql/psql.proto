@@ -15,21 +15,21 @@ enum  TableType {
 
 // Message options for sql generation
 extend google.protobuf.FileOptions {
-    repeated string initialization = 2081;
-    repeated string finalization = 2082;
+    repeated string initialization = 1091;
+    repeated string finalization = 1092;
 }
 
 
 // Message options for sql generation
 extend google.protobuf.MessageOptions {
-    optional bool disabled = 2081;
-    repeated string prefix = 2082;
-    repeated string suffix = 2083;
-    repeated string constraint = 2084;
-    optional TableType tableType = 2085;
+    optional bool disabled = 1091;
+    repeated string prefix = 1092;
+    repeated string suffix = 1093;
+    repeated string constraint = 1094;
+    optional TableType tableType = 1095;
 }
 
 // Field options
 extend google.protobuf.FieldOptions {
-    optional string column = 2081;
+    optional string column = 1091;
 }
