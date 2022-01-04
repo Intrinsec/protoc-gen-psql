@@ -165,6 +165,16 @@ func (v *PSQLVisitor) appendColumn(t string, col string) {
 	v.definitions = append(v.definitions, def)
 }
 
+// addAutoFillUpdate write auto fill function and trigger to final psql file
+func (v *PSQLVisitor) addAutoFillUpdate(t string, field string, value string) {
+	var function_name = fmt.Sprintf("fn_auto_fill_%s_on_%s_update", field, strings.ToLower(t))
+	var trigger_name = fmt.Sprintf("tg_auto_fill_%s_on_%s_update", field, strings.ToLower(t))
+
+	writeln(v.finalW, fmt.Sprintf("CREATE OR REPLACE FUNCTION %s() RETURNS trigger AS $$ BEGIN NEW.%s := %s; RETURN NEW; END; $$ LANGUAGE plpgsql;", function_name, field, value))
+	writeln(v.finalW, fmt.Sprintf("DROP TRIGGER IF EXISTS %s ON %s;", trigger_name, t))
+	writeln(v.finalW, fmt.Sprintf("CREATE TRIGGER %s BEFORE UPDATE ON %s FOR EACH ROW WHEN (OLD IS DISTINCT FROM NEW) EXECUTE FUNCTION %s();", trigger_name, t, function_name))
+}
+
 // appendConstraint append a constraint str to a table t
 func (v *PSQLVisitor) appendConstraint(t string, str string) {
 	var cs string
@@ -296,10 +306,17 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 // VisitField extract psql related options of a field and generate associated statements
 func (v *PSQLVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
 	var column string
+	var auto_fill_value string
 
 	ok, err := f.Extension(psql.E_Column, &column)
 	if ok && err == nil {
 		v.appendColumn(f.Message().Name().String(), f.Name().String()+" "+column)
+
+	}
+
+	ok, err = f.Extension(psql.E_AutoFillOnUpdate, &auto_fill_value)
+	if ok && err == nil {
+		v.addAutoFillUpdate(f.Message().Name().String(), f.Name().String(), auto_fill_value)
 
 	}
 	return nil, nil

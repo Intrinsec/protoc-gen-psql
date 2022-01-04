@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package asset;
 
+import "google/protobuf/timestamp.proto";
 import "psql/psql.proto";
 
 option go_package = "intrinsec.com/test/test/pkg/model;model";
@@ -25,6 +26,10 @@ message Asset {
         (psql.column) = "boolean NOT NULL DEFAULT TRUE"
     ];
 
+    google.protobuf.Timestamp update_time = 6 [
+        (psql.column)                       = "timestamp with time zone NOT NULL DEFAULT now()",
+        (psql.auto_fill_on_update)          = "now()"
+    ];
 }
 
 

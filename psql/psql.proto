@@ -12,7 +12,6 @@ enum  TableType {
     RELATION = 1;
 }
 
-
 // Message options for sql generation
 extend google.protobuf.FileOptions {
     repeated string initialization = 1091;
@@ -32,4 +31,5 @@ extend google.protobuf.MessageOptions {
 // Field options
 extend google.protobuf.FieldOptions {
     optional string column = 1091;
+    optional string auto_fill_on_update = 1096;
 }
