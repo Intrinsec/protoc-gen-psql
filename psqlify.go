@@ -1,14 +1,24 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
 	"io"
 	"strings"
+	"text/template"
 
 	"bytes"
 
 	psql "github.com/intrinsec/protoc-gen-psql/psql"
 	pgs "github.com/lyft/protoc-gen-star"
+)
+
+var (
+	//go:embed _templates/auto_fill_on_update.tpl.psql
+	templateAutoFillOnUpdate string
+
+	//go:embed _templates/cascade_update.tpl.psql
+	templateCascadeUpdate string
 )
 
 // PSQLModule implement a custom protoc-gen-star module
@@ -165,16 +175,6 @@ func (v *PSQLVisitor) appendColumn(t string, col string) {
 	v.definitions = append(v.definitions, def)
 }
 
-// addAutoFillUpdate write auto fill function and trigger to final psql file
-func (v *PSQLVisitor) addAutoFillUpdate(t string, field string, value string) {
-	var function_name = fmt.Sprintf("fn_auto_fill_%s_on_%s_update", field, strings.ToLower(t))
-	var trigger_name = fmt.Sprintf("tg_auto_fill_%s_on_%s_update", field, strings.ToLower(t))
-
-	writeln(v.finalW, fmt.Sprintf("CREATE OR REPLACE FUNCTION %s() RETURNS trigger AS $$ BEGIN NEW.%s := %s; RETURN NEW; END; $$ LANGUAGE plpgsql;", function_name, field, value))
-	writeln(v.finalW, fmt.Sprintf("DROP TRIGGER IF EXISTS %s ON %s;", trigger_name, t))
-	writeln(v.finalW, fmt.Sprintf("CREATE TRIGGER %s BEFORE UPDATE ON %s FOR EACH ROW WHEN (OLD IS DISTINCT FROM NEW) EXECUTE FUNCTION %s();", trigger_name, t, function_name))
-}
-
 // appendConstraint append a constraint str to a table t
 func (v *PSQLVisitor) appendConstraint(t string, str string) {
 	var cs string
@@ -189,6 +189,68 @@ func (v *PSQLVisitor) appendConstraint(t string, str string) {
 		cs = str
 	}
 	v.definitions = append(v.definitions, cs)
+}
+
+// addAutoFillUpdate write auto fill function and trigger to final psql file
+func (v *PSQLVisitor) addAutoFillUpdate(t string, field string, value string) {
+	data := struct {
+		FunctionName string
+		TriggerName  string
+		Table        string
+		Field        string
+		Value        string
+	}{
+		FunctionName: fmt.Sprintf("fn_auto_fill_%s_on_%s_update", field, strings.ToLower(t)),
+		TriggerName:  fmt.Sprintf("tg_auto_fill_%s_on_%s_update", field, strings.ToLower(t)),
+		Table:        t,
+		Field:        field,
+		Value:        value,
+	}
+
+	tmpl, err := template.New(fmt.Sprintf("auto fill %s on %s update", field, t)).Parse(templateAutoFillOnUpdate)
+	if err != nil {
+		panic(err)
+	}
+	err = tmpl.Execute(v.finalW, data)
+	if err != nil {
+		panic(err)
+	}
+}
+
+// addAutoFillUpdate write auto fill function and trigger to final psql file
+func (v *PSQLVisitor) addCascadeUpdate(t string, field string, cascade_update *psql.CascadeUpdate) {
+	for _, table_update := range cascade_update.GetTableUpdates() {
+		for _, updates := range table_update.GetUpdates() {
+			data := struct {
+				FunctionName  string
+				TriggerName   string
+				Table         string
+				Field         string
+				TableToUpdate string
+				Key           string
+				FieldToUpdate string
+				Value         string
+			}{
+				FunctionName:  fmt.Sprintf("fn_%s_cascade_update_%s_on_%s", strings.ToLower(t), updates.Field, strings.ToLower(table_update.Table)),
+				TriggerName:   fmt.Sprintf("tg_%s_cascade_update_%s_on_%s", strings.ToLower(t), updates.Field, strings.ToLower(table_update.Table)),
+				Table:         t,
+				Field:         field,
+				TableToUpdate: table_update.Table,
+				Key:           table_update.Key,
+				FieldToUpdate: updates.Field,
+				Value:         updates.Value,
+			}
+
+			tmpl, err := template.New(fmt.Sprintf("%s_cascade_update_%s_on_%s", t, updates.Field, table_update.Table)).Parse(templateCascadeUpdate)
+			if err != nil {
+				panic(err)
+			}
+			err = tmpl.Execute(v.finalW, data)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
 }
 
 // writeDefinition write definitions to a file then clear definitions
@@ -307,6 +369,7 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 func (v *PSQLVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
 	var column string
 	var auto_fill_value string
+	var cascade_update psql.CascadeUpdate
 
 	ok, err := f.Extension(psql.E_Column, &column)
 	if ok && err == nil {
@@ -317,7 +380,11 @@ func (v *PSQLVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
 	ok, err = f.Extension(psql.E_AutoFillOnUpdate, &auto_fill_value)
 	if ok && err == nil {
 		v.addAutoFillUpdate(f.Message().Name().String(), f.Name().String(), auto_fill_value)
+	}
 
+	ok, err = f.Extension(psql.E_CascadeUpdate, &cascade_update)
+	if ok && err == nil {
+		v.addCascadeUpdate(f.Message().Name().String(), f.Name().String(), &cascade_update)
 	}
 	return nil, nil
 }

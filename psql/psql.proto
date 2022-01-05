@@ -12,12 +12,27 @@ enum  TableType {
     RELATION = 1;
 }
 
+message CascadeUpdate {
+    repeated TableUpdate table_updates = 1;
+}
+
+message TableUpdate {
+    string table = 1;
+    string key = 2;
+
+    message Updates {
+        string field = 1;
+        string value = 2;
+    }
+
+    repeated Updates updates = 3;
+}
+
 // Message options for sql generation
 extend google.protobuf.FileOptions {
     repeated string initialization = 1091;
     repeated string finalization = 1092;
 }
-
 
 // Message options for sql generation
 extend google.protobuf.MessageOptions {
@@ -32,4 +47,5 @@ extend google.protobuf.MessageOptions {
 extend google.protobuf.FieldOptions {
     optional string column = 1091;
     optional string auto_fill_on_update = 1096;
+    optional CascadeUpdate cascade_update = 1097;
 }
