@@ -206,15 +206,8 @@ func (v *PSQLVisitor) addAutoFillUpdate(t string, field string, value string) {
 		Field:        field,
 		Value:        value,
 	}
-
-	tmpl, err := template.New(fmt.Sprintf("auto fill %s on %s update", field, t)).Parse(templateAutoFillOnUpdate)
-	if err != nil {
-		panic(err)
-	}
-	err = tmpl.Execute(v.finalW, data)
-	if err != nil {
-		panic(err)
-	}
+	templateName := fmt.Sprintf("auto fill %s on %s update", field, t)
+	generateFromTemplate(templateAutoFillOnUpdate, templateName, data, v.finalW)
 }
 
 // addAutoFillUpdate write auto fill function and trigger to final psql file
@@ -240,15 +233,8 @@ func (v *PSQLVisitor) addCascadeUpdate(t string, field string, cascade_update *p
 				FieldToUpdate: updates.Field,
 				Value:         updates.Value,
 			}
-
-			tmpl, err := template.New(fmt.Sprintf("%s_cascade_update_%s_on_%s", t, updates.Field, table_update.Table)).Parse(templateCascadeUpdate)
-			if err != nil {
-				panic(err)
-			}
-			err = tmpl.Execute(v.finalW, data)
-			if err != nil {
-				panic(err)
-			}
+			templateName := fmt.Sprintf("%s_cascade_update_%s_on_%s", t, updates.Field, table_update.Table)
+			generateFromTemplate(templateCascadeUpdate, templateName, data, v.finalW)
 		}
 	}
 }
@@ -387,4 +373,15 @@ func (v *PSQLVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
 		v.addCascadeUpdate(f.Message().Name().String(), f.Name().String(), &cascade_update)
 	}
 	return nil, nil
+}
+
+func generateFromTemplate(templateText string, templateName string, data interface{}, writer io.Writer) {
+	tmpl, err := template.New(templateName).Parse(templateText)
+	if err != nil {
+		panic(err)
+	}
+	err = tmpl.Execute(writer, data)
+	if err != nil {
+		panic(err)
+	}
 }
