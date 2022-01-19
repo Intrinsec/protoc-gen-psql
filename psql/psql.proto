@@ -13,10 +13,6 @@ enum  TableType {
 }
 
 message CascadeUpdate {
-    repeated TableUpdate table_updates = 1;
-}
-
-message TableUpdate {
     string table = 1;
     string key = 2;
 

@@ -160,29 +160,27 @@ func (v *PSQLVisitor) writeAutoFillUpdate(t string, field string, value string) 
 
 // addAutoFillUpdate write auto fill function and trigger to final psql file
 func (v *PSQLVisitor) writeCascadeUpdate(t string, field string, cascade_update *psql.CascadeUpdate) {
-	for _, table_update := range cascade_update.GetTableUpdates() {
-		for _, updates := range table_update.GetUpdates() {
-			data := struct {
-				FunctionName  string
-				TriggerName   string
-				Table         string
-				Field         string
-				TableToUpdate string
-				Key           string
-				FieldToUpdate string
-				Value         string
-			}{
-				FunctionName:  fmt.Sprintf("fn_%s_cascade_update_%s_on_%s", strings.ToLower(t), updates.Field, strings.ToLower(table_update.Table)),
-				TriggerName:   fmt.Sprintf("tg_%s_cascade_update_%s_on_%s", strings.ToLower(t), updates.Field, strings.ToLower(table_update.Table)),
-				Table:         t,
-				Field:         field,
-				TableToUpdate: table_update.Table,
-				Key:           table_update.Key,
-				FieldToUpdate: updates.Field,
-				Value:         updates.Value,
-			}
-			generateFromTemplate(templateCascadeUpdate, data.TriggerName, data, v.finalW)
+	for _, updates := range cascade_update.GetUpdates() {
+		data := struct {
+			FunctionName  string
+			TriggerName   string
+			Table         string
+			Field         string
+			TableToUpdate string
+			Key           string
+			FieldToUpdate string
+			Value         string
+		}{
+			FunctionName:  fmt.Sprintf("fn_%s_cascade_update_%s_on_%s", strings.ToLower(t), updates.Field, strings.ToLower(cascade_update.Table)),
+			TriggerName:   fmt.Sprintf("tg_%s_cascade_update_%s_on_%s", strings.ToLower(t), updates.Field, strings.ToLower(cascade_update.Table)),
+			Table:         t,
+			Field:         field,
+			TableToUpdate: cascade_update.Table,
+			Key:           cascade_update.Key,
+			FieldToUpdate: updates.Field,
+			Value:         updates.Value,
 		}
+		generateFromTemplate(templateCascadeUpdate, data.TriggerName, data, v.finalW)
 	}
 }
 

@@ -50,16 +50,12 @@ message GroupsAssetAsset {
     string child_id = 2 [
         (psql.column) = "uuid REFERENCES Asset(uuid) ON DELETE CASCADE",
         (psql.cascade_update) = {
-            table_updates: [
+            table: "Asset",
+            key: "uuid",
+            updates: [
                 {
-                    table: "Asset",
-                    key: "uuid",
-                    updates: [
-                        {
-                            field: "update_time",
-                            value: "now()"
-                        }
-                    ];
+                    field: "update_time",
+                    value: "now()"
                 }
             ];
         }
