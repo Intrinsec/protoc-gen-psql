@@ -33,7 +33,12 @@ Other remaining options defines what statements will be contained in the table d
 
 ### At field level
 
-A single `column` option is available and let describe how the field should be represented in the schema.
+- `column`: let describe how the field should be represented in the schema.
+- `auto_fill_on_update`: create a trigger to update this field with the given value each time the table is updated. The given value can be a function (ex: now()).
+- `cascade_update`: create a trigger to update other fields from another table each time the table is updated. This option must be set on the foreign key of the table to update:
+    - `table`: table to update
+    - `key`: table primary key which must contains the foreign key value
+    - `updates`: List of fields to update with the associated value to set (ex.: [{field: "update_time", value: "now()"}]).
 
 ## PSQL files naming convention
 
