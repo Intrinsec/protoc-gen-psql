@@ -19,6 +19,15 @@ var (
 
 	//go:embed _templates/cascade_update.tpl.psql
 	templateCascadeUpdate string
+
+	//go:embed _templates/create_table.tpl.psql
+	templateCreateTable string
+
+	//go:embed _templates/alter_table.tpl.psql
+	templateAlterTable string
+
+	//go:embed _templates/generic.tpl.psql
+	templateGeneric string
 )
 
 // PSQLModule implement a custom protoc-gen-star module
@@ -106,7 +115,7 @@ type PSQLVisitor struct {
 	finalW         io.Writer
 	dataTableW     io.Writer
 	relationTableW io.Writer
-	definitions    []string
+	columns        []string
 	alter          bool
 }
 
@@ -124,75 +133,15 @@ func initPSQLVisitor(
 		dataTableW:     dataTableW,
 		relationTableW: relationTableW,
 		DebuggerCommon: d,
-		definitions:    []string{},
+		columns:        []string{},
 		alter:          alter,
 	}
 	v.Visitor = pgs.PassThroughVisitor(&v)
 	return &v
 }
 
-func writeComment(w io.Writer, str string) {
-	fmt.Fprintf(w, "-- %s\n", str)
-}
-
-func write(w io.Writer, str string) {
-	fmt.Fprintf(w, "%s", str)
-}
-
-func writeln(w io.Writer, str string) {
-	fmt.Fprintf(w, "%s\n", str)
-}
-
-// createTable start a statement to create a table
-func (v *PSQLVisitor) createTable(w io.Writer, str string) {
-	write(w, "CREATE TABLE IF NOT EXISTS "+str+" (")
-
-	var strEnd string
-	if v.alter {
-		strEnd = ");"
-	} else {
-		strEnd = ""
-	}
-
-	writeln(w, strEnd)
-}
-
-// appendDefinition append a full independent SQL statement without any formatting
-func (v *PSQLVisitor) appendDefinition(str string) {
-	v.definitions = append(v.definitions, str)
-	v.Debug("appendDefinition: defs = %v+", v.definitions)
-}
-
-// appendColumn append a column col to a table t
-func (v *PSQLVisitor) appendColumn(t string, col string) {
-	var def string
-	if v.alter {
-		def = "ALTER TABLE " + t + " ADD COLUMN IF NOT EXISTS " + col + ";\n"
-	} else {
-		def = col
-	}
-
-	v.definitions = append(v.definitions, def)
-}
-
-// appendConstraint append a constraint str to a table t
-func (v *PSQLVisitor) appendConstraint(t string, str string) {
-	var cs string
-	if v.alter {
-		cs = "DO $$\n" +
-			"BEGIN\n" +
-			"ALTER TABLE " + t + " ADD " + str + ";\n" +
-			"EXCEPTION WHEN duplicate_object THEN RAISE NOTICE '%, skipping', SQLERRM USING ERRCODE = SQLSTATE;\n" +
-			"END\n" +
-			"$$;\n"
-	} else {
-		cs = str
-	}
-	v.definitions = append(v.definitions, cs)
-}
-
-// addAutoFillUpdate write auto fill function and trigger to final psql file
-func (v *PSQLVisitor) addAutoFillUpdate(t string, field string, value string) {
+// writeAutoFillUpdate write auto fill function and trigger to final psql file
+func (v *PSQLVisitor) writeAutoFillUpdate(t string, field string, value string) {
 	data := struct {
 		FunctionName string
 		TriggerName  string
@@ -206,12 +155,11 @@ func (v *PSQLVisitor) addAutoFillUpdate(t string, field string, value string) {
 		Field:        field,
 		Value:        value,
 	}
-	templateName := fmt.Sprintf("auto fill %s on %s update", field, t)
-	generateFromTemplate(templateAutoFillOnUpdate, templateName, data, v.finalW)
+	generateFromTemplate(templateAutoFillOnUpdate, data.TriggerName, data, v.finalW)
 }
 
 // addAutoFillUpdate write auto fill function and trigger to final psql file
-func (v *PSQLVisitor) addCascadeUpdate(t string, field string, cascade_update *psql.CascadeUpdate) {
+func (v *PSQLVisitor) writeCascadeUpdate(t string, field string, cascade_update *psql.CascadeUpdate) {
 	for _, table_update := range cascade_update.GetTableUpdates() {
 		for _, updates := range table_update.GetUpdates() {
 			data := struct {
@@ -233,50 +181,59 @@ func (v *PSQLVisitor) addCascadeUpdate(t string, field string, cascade_update *p
 				FieldToUpdate: updates.Field,
 				Value:         updates.Value,
 			}
-			templateName := fmt.Sprintf("%s_cascade_update_%s_on_%s", t, updates.Field, table_update.Table)
-			generateFromTemplate(templateCascadeUpdate, templateName, data, v.finalW)
+			generateFromTemplate(templateCascadeUpdate, data.TriggerName, data, v.finalW)
 		}
 	}
 }
 
-// writeDefinition write definitions to a file then clear definitions
-func (v *PSQLVisitor) writeDefinition(w io.Writer) {
-	v.Debug("writeDefinition: defs = %v+", v.definitions)
-	if v.alter {
-		fmt.Fprintf(w, "%s\n", strings.Join(v.definitions, "\n"))
-	} else {
-		fmt.Fprintf(w, "\t%s\n", strings.Join(v.definitions, ",\n\t"))
+func generateFromTemplate(templateText string, templateName string, data interface{}, writer io.Writer) {
+	tmpl, err := template.New(templateName).Funcs(template.FuncMap{"StringsJoin": strings.Join}).Parse(templateText)
+	if err != nil {
+		panic(err)
 	}
-	v.definitions = []string{}
+	err = tmpl.Execute(writer, data)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func AppendSlices(slices [][]string) []string {
+	var tmp []string
+	for _, s := range slices {
+		tmp = append(tmp, s...)
+	}
+	return tmp
 }
 
 // VisitFile prepare a .psql from a proto one
 // For each messages, call VisitMessage
 func (v *PSQLVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
-	v.Debug("pssql: Processing file " + f.Name().String())
-	writeComment(v.initW, "File: "+f.Name().String())
-	write(v.initW, "")
+	v.Debugf("pssql: Processing file %s", f.Name().String())
 
 	initializations := make([]string, 0)
 	finalizations := make([]string, 0)
 
-	if ok, err := f.Extension(psql.E_Initialization, &initializations); ok && err == nil {
-		for _, init := range initializations {
-			writeln(v.initW, init)
-		}
+	if ok, err := f.Extension(psql.E_Initialization, &initializations); ok && err != nil {
+		v.Logf("Error can't retrieve initialization extensions for file %s with error: %s", f.Name().String(), err)
 	}
 
-	for _, message := range f.AllMessages() {
-		pgs.Walk(v, message)
+	if ok, err := f.Extension(psql.E_Finalization, &finalizations); ok && err != nil {
+		v.Logf("Error can't retrieve finalization extensions for file %s with error: %s", f.Name().String(), err)
 	}
 
-	if ok, err := f.Extension(psql.E_Finalization, &finalizations); ok && err == nil {
-		for _, final := range finalizations {
-			writeln(v.finalW, final)
-		}
+	data := struct {
+		FileName string
+		Queries  []string
+	}{
+		FileName: f.Name().String(),
+		Queries:  initializations,
 	}
+	generateFromTemplate(templateGeneric, "initialization "+f.Name().String(), data, v.initW)
 
-	return nil, nil
+	data.Queries = finalizations
+	generateFromTemplate(templateGeneric, "finalization"+f.Name().String(), data, v.finalW)
+
+	return initPSQLVisitor(v, v.initW, v.finalW, v.dataTableW, v.relationTableW, v.alter), nil
 }
 
 // VisitMessage extract psql related options of a messages and generate associated statements
@@ -287,7 +244,7 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 	var w *io.Writer
 
 	if ok, err := m.Extension(psql.E_Disabled, &disabled); ok && err == nil && disabled {
-		v.Logf("Generation disabled for message " + m.Name().String())
+		v.Logf("Generation disabled for message %s", m.Name().String())
 		return nil, nil
 	}
 
@@ -298,7 +255,7 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 	}
 
 	if !ok {
-		v.Logf("Unable to find an extension tableType equal to DATA or RELATION. Skipping message: " + m.Name().String())
+		v.Logf("Unable to find an extension tableType equal to DATA or RELATION. Skipping message: %s", m.Name().String())
 		return nil, nil
 	}
 
@@ -313,40 +270,54 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 		w = &v.dataTableW
 	}
 
-	writeComment(*w, "File: "+m.File().Name().String())
-	v.createTable(*w, m.Name().String())
-
 	prefixes := make([]string, 0)
 	suffixes := make([]string, 0)
 	constraints := make([]string, 0)
 
-	if ok, err := m.Extension(psql.E_Prefix, &prefixes); ok && err == nil {
-		for _, prefix := range prefixes {
-			v.appendDefinition(prefix)
-		}
+	if ok, err := m.Extension(psql.E_Prefix, &prefixes); ok && err != nil {
+		v.Logf("Error can't retrieve prefix extensions for message %s with error: %s", m.Name().String(), err)
+	}
+
+	if ok, err := m.Extension(psql.E_Constraint, &constraints); ok && err != nil {
+		v.Logf("Error can't retrieve constraint extensions for message %s with error: %s", m.Name().String(), err)
+	}
+
+	if ok, err := m.Extension(psql.E_Suffix, &suffixes); ok && err != nil {
+		v.Logf("Error can't retrieve suffix extensions for message %s with error: %s", m.Name().String(), err)
 	}
 
 	for _, field := range m.Fields() {
 		pgs.Walk(v, field)
 	}
 
-	if ok, err := m.Extension(psql.E_Constraint, &constraints); ok && err == nil {
-		for _, constraint := range constraints {
-			v.appendConstraint(m.Name().String(), constraint)
-		}
+	var templateText string
+	if v.alter {
+		templateText = templateAlterTable
+	} else {
+		templateText = templateCreateTable
 	}
 
-	if ok, err := m.Extension(psql.E_Suffix, &suffixes); ok && err == nil {
-		for _, suffix := range suffixes {
-			v.appendDefinition(suffix)
-		}
-	}
-	v.writeDefinition(*w)
+	definitions := AppendSlices([][]string{prefixes, v.columns, constraints, suffixes})
 
-	// close the CREATE TABLE statement properly if we are not in "alter" mode
-	if !v.alter {
-		writeln(*w, ");")
+	data := struct {
+		FileName    string
+		Name        string
+		Definitions []string
+		Prefixes    []string
+		Columns     []string
+		Constraints []string
+		Suffixes    []string
+	}{
+		FileName:    m.File().Name().String(),
+		Name:        m.Name().String(),
+		Definitions: definitions,
+		Prefixes:    prefixes,
+		Columns:     v.columns,
+		Constraints: constraints,
+		Suffixes:    suffixes,
 	}
+	generateFromTemplate(templateText, "dataTable "+m.Name().String(), data, *w)
+	v.columns = []string{}
 
 	return nil, nil
 }
@@ -359,29 +330,18 @@ func (v *PSQLVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
 
 	ok, err := f.Extension(psql.E_Column, &column)
 	if ok && err == nil {
-		v.appendColumn(f.Message().Name().String(), f.Name().String()+" "+column)
-
+		v.columns = append(v.columns, f.Name().String()+" "+column)
 	}
 
 	ok, err = f.Extension(psql.E_AutoFillOnUpdate, &auto_fill_value)
 	if ok && err == nil {
-		v.addAutoFillUpdate(f.Message().Name().String(), f.Name().String(), auto_fill_value)
+		v.writeAutoFillUpdate(f.Message().Name().String(), f.Name().String(), auto_fill_value)
 	}
 
 	ok, err = f.Extension(psql.E_CascadeUpdate, &cascade_update)
 	if ok && err == nil {
-		v.addCascadeUpdate(f.Message().Name().String(), f.Name().String(), &cascade_update)
+		v.writeCascadeUpdate(f.Message().Name().String(), f.Name().String(), &cascade_update)
 	}
-	return nil, nil
-}
 
-func generateFromTemplate(templateText string, templateName string, data interface{}, writer io.Writer) {
-	tmpl, err := template.New(templateName).Parse(templateText)
-	if err != nil {
-		panic(err)
-	}
-	err = tmpl.Execute(writer, data)
-	if err != nil {
-		panic(err)
-	}
+	return nil, nil
 }

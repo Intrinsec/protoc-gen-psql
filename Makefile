@@ -42,7 +42,6 @@ test-generate: build
 	@protoc -I . --plugin=protoc-gen-$(NAME)=$(shell pwd)/bin/protoc-gen-$(NAME) --$(NAME)_out="." tests/asset.proto
 	@cat tests/*.pb.psql
 
-
 .PHONY: build-docker
 build-docker:
 	docker-compose -p $(NAME)-$(CI_JOB_ID) -f ./tests/docker-compose.tests.yml build
