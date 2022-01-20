@@ -82,28 +82,33 @@ func (p *PSQLModule) generateFiles(
 	v := initPSQLVisitor(p, bufInit, bufFinal, bufDataTable, bufRelationTable, alter)
 	p.CheckErr(pgs.Walk(v, f), "unable to generate psql")
 
-	outInit := bufInit.String()
-	outFinal := bufFinal.String()
-	outTables := bufDataTable.String()
-	outRelations := bufRelationTable.String()
-
+	fileName := f.InputPath().BaseName()
 	outName := f.InputPath().BaseName() + ".pb.psql"
-	p.AddGeneratorFile(
-		f.InputPath().SetBase("00_init_").String()+outName,
-		outInit,
-	)
-	p.AddGeneratorFile(
-		f.InputPath().SetBase("99_final_").String()+outName,
-		outFinal,
-	)
-	p.AddGeneratorFile(
-		f.InputPath().SetBase("10_tables_").String()+outName,
-		outTables,
-	)
-	p.AddGeneratorFile(
-		f.InputPath().SetBase("20_relations_").String()+outName,
-		outRelations,
-	)
+
+	if outInit, count := getStringBufferWithHeader(bufInit, fileName); count != 0 {
+		p.AddGeneratorFile(
+			f.InputPath().SetBase("00_init_").String()+outName,
+			outInit,
+		)
+	}
+	if outFinal, count := getStringBufferWithHeader(bufFinal, fileName); count != 0 {
+		p.AddGeneratorFile(
+			f.InputPath().SetBase("99_final_").String()+outName,
+			outFinal,
+		)
+	}
+	if outTables, count := getStringBufferWithHeader(bufDataTable, fileName); count != 0 {
+		p.AddGeneratorFile(
+			f.InputPath().SetBase("10_tables_").String()+outName,
+			outTables,
+		)
+	}
+	if outRelations, count := getStringBufferWithHeader(bufRelationTable, fileName); count != 0 {
+		p.AddGeneratorFile(
+			f.InputPath().SetBase("20_relations_").String()+outName,
+			outRelations,
+		)
+	}
 }
 
 // PSQLVisitor represent a visitor to walk the proto tree and analyse content
@@ -195,12 +200,17 @@ func generateFromTemplate(templateText string, templateName string, data interfa
 	}
 }
 
-func AppendSlices(slices [][]string) []string {
+func appendSlices(slices ...[]string) []string {
 	var tmp []string
 	for _, s := range slices {
 		tmp = append(tmp, s...)
 	}
 	return tmp
+}
+
+func getStringBufferWithHeader(buf *bytes.Buffer, fileName string) (string, int) {
+	out := buf.String()
+	return fmt.Sprintf("-- File: %s\n%s", fileName, out), len(out)
 }
 
 // VisitFile prepare a .psql from a proto one
@@ -211,25 +221,27 @@ func (v *PSQLVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
 	initializations := make([]string, 0)
 	finalizations := make([]string, 0)
 
-	if ok, err := f.Extension(psql.E_Initialization, &initializations); ok && err != nil {
+	ok, err := f.Extension(psql.E_Initialization, &initializations)
+	if err != nil {
 		v.Logf("Error can't retrieve initialization extensions for file %s with error: %s", f.Name().String(), err)
+	} else if ok {
+		_, err = v.initW.Write([]byte(strings.Join(initializations, "\n")))
+
+		if err != nil {
+			v.Logf("Error can't write initialization for file %s with error: %s", f.Name().String(), err)
+		}
 	}
 
-	if ok, err := f.Extension(psql.E_Finalization, &finalizations); ok && err != nil {
+	ok, err = f.Extension(psql.E_Finalization, &finalizations)
+	if err != nil {
 		v.Logf("Error can't retrieve finalization extensions for file %s with error: %s", f.Name().String(), err)
-	}
+	} else if ok {
+		_, err = v.initW.Write([]byte(strings.Join(initializations, "\n")))
 
-	data := struct {
-		FileName string
-		Queries  []string
-	}{
-		FileName: f.Name().String(),
-		Queries:  initializations,
+		if err != nil {
+			v.Logf("Error can't write finalization for file %s with error: %s", f.Name().String(), err)
+		}
 	}
-	generateFromTemplate(templateGeneric, "initialization "+f.Name().String(), data, v.initW)
-
-	data.Queries = finalizations
-	generateFromTemplate(templateGeneric, "finalization"+f.Name().String(), data, v.finalW)
 
 	return initPSQLVisitor(v, v.initW, v.finalW, v.dataTableW, v.relationTableW, v.alter), nil
 }
@@ -295,7 +307,7 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 		templateText = templateCreateTable
 	}
 
-	definitions := AppendSlices([][]string{prefixes, v.columns, constraints, suffixes})
+	definitions := appendSlices(prefixes, v.columns, constraints, suffixes)
 
 	data := struct {
 		FileName    string
