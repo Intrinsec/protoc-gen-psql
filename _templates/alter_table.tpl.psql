@@ -1,0 +1,14 @@
+CREATE TABLE IF NOT EXISTS {{ .Name }} ();
+{{ StringsJoin .Prefixes "\n"}}
+{{ range $Column := .Columns }}
+ALTER TABLE {{ $.Name }} ADD COLUMN IF NOT EXISTS {{ $Column }};
+{{ end }}
+{{ range $Constraint := .Constraints }}
+DO $$
+BEGIN
+    ALTER TABLE {{ $.Name }} ADD {{ $Constraint }};
+    EXCEPTION WHEN duplicate_object THEN RAISE NOTICE '%, skipping', SQLERRM USING ERRCODE = SQLSTATE;
+END
+$$;
+{{ end }}
+{{ StringsJoin .Suffixes "\n"}}

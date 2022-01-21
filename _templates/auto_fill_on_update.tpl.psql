@@ -1,0 +1,11 @@
+
+CREATE OR REPLACE FUNCTION {{ .FunctionName }}()
+    RETURNS trigger
+    LANGUAGE plpgsql
+AS $$
+BEGIN
+    NEW.{{ .Field }} := {{ .Value }}; RETURN NEW;
+END
+$$;
+DROP TRIGGER IF EXISTS {{ .TriggerName }} ON {{ .Table }};
+CREATE TRIGGER {{ .TriggerName }} BEFORE UPDATE ON {{ .Table }} FOR EACH ROW WHEN (OLD IS DISTINCT FROM NEW) EXECUTE FUNCTION {{ .FunctionName }}();
