@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+package action;
+
+import "google/protobuf/timestamp.proto";
+import "psql/psql.proto";
+
+option go_package = "intrinsec.com/test/test/pkg/model;model";
+
+message Action {
+    option (psql.tableType) = DATA;
+
+    string id = 1 [
+        (psql.column) = "uuid PRIMARY KEY DEFAULT gen_random_uuid()"
+    ];
+
+    bool enabled = 2 [
+        (psql.column) = "boolean NOT NULL DEFAULT TRUE"
+    ];
+
+    google.protobuf.Timestamp update_time = 6 [
+        (psql.column)                       = "timestamp with time zone NOT NULL DEFAULT now()",
+        (psql.auto_fill_on_update)          = "now()"
+    ];
+}
+
+message Incident {
+    option (psql.tableType) = DATA;
+
+    string uuid = 1 [
+        (psql.column) = "uuid PRIMARY KEY DEFAULT gen_random_uuid()"
+    ];
+
+    bool enabled = 2 [
+        (psql.column) = "boolean NOT NULL DEFAULT TRUE"
+    ];
+
+    google.protobuf.Timestamp update_time = 6 [
+        (psql.column)                       = "timestamp with time zone NOT NULL DEFAULT now()",
+        (psql.auto_fill_on_update)          = "now()"
+    ];
+}
+
+message Communication {
+    option (psql.tableType) = DATA;
+
+    string uuid = 1 [
+        (psql.column) = "uuid PRIMARY KEY DEFAULT gen_random_uuid()"
+    ];
+
+    bool enabled = 2 [
+        (psql.column) = "boolean NOT NULL DEFAULT TRUE"
+    ];
+
+    google.protobuf.Timestamp update_time = 6 [
+        (psql.column)                       = "timestamp with time zone NOT NULL DEFAULT now()",
+        (psql.auto_fill_on_update)          = "now()"
+    ];
+}
+
+message EntityAction {
+    option (psql.tableType) = RELATION;
+
+    option (psql.relay_cascade_update) = {
+        source_foreign_key : "action_uuid",
+        destinations: [       
+            {
+                foreign_key: "incident_uuid"
+                field: "update_time",
+                value: "now()",
+            },
+            {
+                foreign_key: "communication_uuid"
+                field: "update_time",
+                value: "10"
+            }
+        ]
+    };
+
+    string action_uuid = 1 [
+        (psql.column) = "uuid UNIQUE REFERENCES Action(id) ON DELETE CASCADE"
+    ];
+
+    string incident_uuid = 2 [
+        (psql.column) = "uuid REFERENCES Incident(uuid) ON DELETE CASCADE"
+    ];
+
+    string communication_uuid = 3 [
+        (psql.column) = "uuid REFERENCES Communication(uuid) ON DELETE CASCADE"
+    ];
+
+    option (psql.constraint) = "UNIQUE (raw_incident_uuid, raw_action_uuid, raw_communication_uuid)";
+
+    option (psql.constraint) = "CONSTRAINT ck_uniq_reference CHECK (num_nonnulls(raw_incident_uuid,raw_communication_uuid) = 1)";
+}

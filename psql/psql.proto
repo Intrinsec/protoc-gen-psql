@@ -12,16 +12,21 @@ enum  TableType {
     RELATION = 1;
 }
 
-message CascadeUpdate {
-    string table = 1;
-    string key = 2;
+message CascadeUpdateOnRelatedTable {
+    string field = 1;
+    string value = 2;
+}
 
-    message Updates {
-        string field = 1;
-        string value = 2;
+message RelayCascadeUpdate {
+    string source_foreign_key = 1;
+
+    message Destination {
+        string foreign_key = 1;
+        string field = 2;
+        string value = 3;
     }
 
-    repeated Updates updates = 3;
+    repeated Destination destinations = 2;
 }
 
 // Message options for sql generation
@@ -37,11 +42,12 @@ extend google.protobuf.MessageOptions {
     repeated string suffix = 1093;
     repeated string constraint = 1094;
     optional TableType tableType = 1095;
+    repeated RelayCascadeUpdate relay_cascade_update = 1096;
 }
 
 // Field options
 extend google.protobuf.FieldOptions {
     optional string column = 1091;
-    optional string auto_fill_on_update = 1096;
-    optional CascadeUpdate cascade_update = 1097;
+    optional string auto_fill_on_update = 1092;
+    repeated CascadeUpdateOnRelatedTable cascade_update_on_related_table = 1093;
 }
