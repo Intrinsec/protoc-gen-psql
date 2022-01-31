@@ -19,11 +19,15 @@ BEGIN
 		BEGIN
 
 			IF (TG_OP IN ('DELETE', 'UPDATE')) THEN
-				UPDATE %2$I SET {{ .FieldToUpdate }} = {{ .Value }} WHERE %3$I = OLD.{{ .ForeignKey }};
+			{{ range $Update := .Updates}}
+				UPDATE %2$I SET {{ $Update.Field }} = {{ $Update.Value }} WHERE %3$I = OLD.{{ $.ForeignKey }};
+			{{ end }}
 			END IF;
 			
 			IF (TG_OP IN ('INSERT', 'UPDATE')) THEN
-				UPDATE %2$I SET {{ .FieldToUpdate }} = {{ .Value }} WHERE %3$I = NEW.{{ .ForeignKey }};
+			{{ range $Update := .Updates}}
+				UPDATE %2$I SET {{ $Update.Field }} = {{ $Update.Value }} WHERE %3$I = NEW.{{ $.ForeignKey }};
+			{{ end }}
 			END IF;
 
 			RETURN NULL;

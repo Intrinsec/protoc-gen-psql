@@ -189,24 +189,20 @@ func (v *PSQLVisitor) writeRelayCascadeUpdate(relationTable string, relayCascade
 }
 
 func (v *PSQLVisitor) writeCascadeUpdateOnRelatedTable(relationTable string, foreignKey string, cascadeUpdateOnRelatedTables []*psql.CascadeUpdateOnRelatedTable) {
-	for _, cascadeUpdateOnRelatedTable := range cascadeUpdateOnRelatedTables {
-		data := struct {
-			FunctionName  string
-			TriggerName   string
-			RelationTable string
-			ForeignKey    string
-			FieldToUpdate string
-			Value         string
-		}{
-			FunctionName:  strings.ToLower(fmt.Sprintf("fn_%s_cascade_update_on_%s_to_%s", relationTable, foreignKey, cascadeUpdateOnRelatedTable.Field)),
-			TriggerName:   strings.ToLower(fmt.Sprintf("tg_%s_cascade_update_on_%s_to_%s", relationTable, foreignKey, cascadeUpdateOnRelatedTable.Field)),
-			RelationTable: relationTable,
-			ForeignKey:    foreignKey,
-			FieldToUpdate: cascadeUpdateOnRelatedTable.Field,
-			Value:         cascadeUpdateOnRelatedTable.Value,
-		}
-		generateFromTemplate(templateCascadeUpdateOnRelatedTable, data.TriggerName, data, v.finalW)
+	data := struct {
+		FunctionName  string
+		TriggerName   string
+		RelationTable string
+		ForeignKey    string
+		Updates       []*psql.CascadeUpdateOnRelatedTable
+	}{
+		FunctionName:  strings.ToLower(fmt.Sprintf("fn_%s_cascade_update_on_%s", relationTable, foreignKey)),
+		TriggerName:   strings.ToLower(fmt.Sprintf("tg_%s_cascade_update_on_%s", relationTable, foreignKey)),
+		RelationTable: relationTable,
+		ForeignKey:    foreignKey,
+		Updates:       cascadeUpdateOnRelatedTables,
 	}
+	generateFromTemplate(templateCascadeUpdateOnRelatedTable, data.TriggerName, data, v.finalW)
 }
 
 func generateFromTemplate(templateText string, templateName string, data interface{}, writer io.Writer) {
