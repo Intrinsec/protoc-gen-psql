@@ -49,3 +49,5 @@ BEGIN
 	RETURN NULL;
 END
 $fn_create_trigger$;
+
+SELECT fn_create_{{ .TriggerName }}();
