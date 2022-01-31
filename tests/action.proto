@@ -82,14 +82,26 @@ message EntityAction {
     ];
 
     string incident_uuid = 2 [
-        (psql.column) = "uuid REFERENCES Incident(uuid) ON DELETE CASCADE"
+        (psql.column) = "uuid REFERENCES Incident(uuid) ON DELETE CASCADE",
+        (psql.cascade_update_on_related_table) = {
+            field: "update_time",
+            value: "now()"
+        }
     ];
 
     string communication_uuid = 3 [
-        (psql.column) = "uuid REFERENCES Communication(uuid) ON DELETE CASCADE"
+        (psql.column) = "uuid REFERENCES Communication(uuid) ON DELETE CASCADE",
+        (psql.cascade_update_on_related_table) = {
+            field: "update_time",
+            value: "10"
+        },
+        (psql.cascade_update_on_related_table) = {
+            field: "enabled",
+            value: "false"
+        }
     ];
 
-    option (psql.constraint) = "UNIQUE (raw_incident_uuid, raw_action_uuid, raw_communication_uuid)";
+    option (psql.constraint) = "UNIQUE (incident_uuid, action_uuid, communication_uuid)";
 
-    option (psql.constraint) = "CONSTRAINT ck_uniq_reference CHECK (num_nonnulls(raw_incident_uuid,raw_communication_uuid) = 1)";
+    option (psql.constraint) = "CONSTRAINT ck_uniq_reference CHECK (num_nonnulls(incident_uuid,communication_uuid) = 1)";
 }

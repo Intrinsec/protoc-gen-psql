@@ -1,53 +1,51 @@
 CREATE OR REPLACE FUNCTION fn_create_{{ .TriggerName }}()
 	RETURNS boolean
 	LANGUAGE plpgsql
-AS $$
+AS $fn_create_trigger$
 DECLARE
 	src_table_name TEXT;
 	src_pk_column_name TEXT;
 	dst_table_name TEXT;
 	dst_pk_column_name TEXT;
 BEGIN
-	SELECT kcu2.table_name, kc2.column_name INTO src_table_name, src_pk_column_name FROM information_schema.key_column_usage AS kcu
+	SELECT kcu2.table_name, kcu2.column_name INTO src_table_name, src_pk_column_name FROM information_schema.key_column_usage AS kcu
 	INNER JOIN information_schema.referential_constraints AS rc ON rc.constraint_name = kcu.constraint_name
 	INNER JOIN information_schema.key_column_usage AS kcu2 ON kcu2.constraint_name = rc.unique_constraint_name
 	WHERE kcu.table_name = lower('{{ .RelationTable }}') AND kcu.column_name = '{{ .SourceForeignKey }}' AND kcu.constraint_name LIKE '%_fkey';
 
-	SELECT kcu2.table_name, kc2.column_name INTO dst_table_name, dst_pk_column_name FROM information_schema.key_column_usage AS kcu
+	SELECT kcu2.table_name, kcu2.column_name INTO dst_table_name, dst_pk_column_name FROM information_schema.key_column_usage AS kcu
 	INNER JOIN information_schema.referential_constraints AS rc ON rc.constraint_name = kcu.constraint_name
 	INNER JOIN information_schema.key_column_usage AS kcu2 ON kcu2.constraint_name = rc.unique_constraint_name
 	WHERE kcu.table_name = lower('{{ .RelationTable }}') AND kcu.column_name = '{{ .DestinationForeignKey }}' AND kcu.constraint_name LIKE '%_fkey';
 
-	EXECUTE FORMAT('''
-	CREATE OR REPLACE FUNCTION {{ .FunctionName }}()
-		RETURNS trigger
-		LANGUAGE plpgsql
-	AS $$
-	DECLARE
-		table_pk record;
-	BEGIN
+	EXECUTE FORMAT($format_function$
+		CREATE OR REPLACE FUNCTION {{ .FunctionName }}()
+			RETURNS trigger
+			LANGUAGE plpgsql
+		AS $$
+		DECLARE
+			table_pk record;
+		BEGIN
 
-		IF (TG_OP IN ('DELETE', 'UPDATE')) THEN
-			table_pk = (SELECT {{ .DestinationForeignKey}} FROM {{ .RelationTable }} WHERE {{ .SourceForeignKey }} = OLD.%1$I)
-			UPDATE %2$I SET {{ .FieldToUpdate }} = {{ .Value }} WHERE %3$I = table_pk; RETURN NULL;
-		END IF;
-		
-		IF (TG_OP IN ('INSERT', 'UPDATE')) THEN
-			table_pk = (SELECT {{ .DestinationForeignKey}} FROM {{ .RelationTable }} WHERE {{ .SourceForeignKey }} = NEW.%1$I)
-			UPDATE %2$I SET {{ .FieldToUpdate }} = {{ .Value }} WHERE %3$I = table_pk; RETURN NULL;
-		END IF;
+			IF (TG_OP IN ('DELETE', 'UPDATE')) THEN
+				table_pk = (SELECT {{ .DestinationForeignKey}} FROM {{ .RelationTable }} WHERE {{ .SourceForeignKey }} = OLD.%1$I);
+				UPDATE %2$I SET {{ .FieldToUpdate }} = {{ .Value }} WHERE %3$I = table_pk;
+			END IF;
+			
+			IF (TG_OP IN ('INSERT', 'UPDATE')) THEN
+				table_pk = (SELECT {{ .DestinationForeignKey}} FROM {{ .RelationTable }} WHERE {{ .SourceForeignKey }} = NEW.%1$I);
+				UPDATE %2$I SET {{ .FieldToUpdate }} = {{ .Value }} WHERE %3$I = table_pk;
+			END IF;
 
-	END
-	$$;
-	DROP TRIGGER IF EXISTS {{ .TriggerName }} ON {{ .Table }};
-	CREATE TRIGGER {{ .TriggerName }} AFTER INSERT OR DELETE OR UPDATE ON {{ .Table }} FOR EACH ROW EXECUTE FUNCTION {{ .FunctionName }}();
-	''', src_pk_column_name, dst_table_name, dst_pk_column_name)
+			RETURN NULL;
+		END
+		$$;
+	$format_function$, src_pk_column_name, dst_table_name, dst_pk_column_name);
 
 	EXECUTE FORMAT('DROP TRIGGER IF EXISTS {{ .TriggerName }} ON %I;', src_table_name);
-
 
 	EXECUTE FORMAT('CREATE TRIGGER {{ .TriggerName }} AFTER INSERT OR DELETE OR UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION {{ .FunctionName }}();', src_table_name);
 
 	RETURN NULL;
 END
-$$;
+$fn_create_trigger$;

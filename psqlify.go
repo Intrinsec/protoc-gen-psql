@@ -20,6 +20,9 @@ var (
 	//go:embed _templates/relay_cascade_update.tpl.psql
 	templateRelayCascadeUpdate string
 
+	//go:embed _templates/cascade_update_on_related_table.tpl.psql
+	templateCascadeUpdateOnRelatedTable string
+
 	//go:embed _templates/create_table.tpl.psql
 	templateCreateTable string
 
@@ -160,30 +163,50 @@ func (v *PSQLVisitor) writeAutoFillUpdate(t string, field string, value string) 
 	generateFromTemplate(templateAutoFillOnUpdate, data.TriggerName, data, v.finalW)
 }
 
-// addAutoFillUpdate write auto fill function and trigger to final psql file
-func (v *PSQLVisitor) writeCascadeUpdate(relationTable string, field string, cascadeUpdates []psql.CascadeUpdateOnRelatedTable) {
-	for _, cascadeUpdate := range cascadeUpdates {
+func (v *PSQLVisitor) writeRelayCascadeUpdate(relationTable string, relayCascadeUpdates []*psql.RelayCascadeUpdate) {
+	for _, relayCascadeUpdate := range relayCascadeUpdates {
+		for _, destination := range relayCascadeUpdate.Destinations {
+			data := struct {
+				FunctionName          string
+				TriggerName           string
+				RelationTable         string
+				FieldToUpdate         string
+				SourceForeignKey      string
+				DestinationForeignKey string
+				Value                 string
+			}{
+				FunctionName:          strings.ToLower(fmt.Sprintf("fn_%s_relay_cascade_update_from_%s_to_%s", relationTable, relayCascadeUpdate.SourceForeignKey, destination.ForeignKey)),
+				TriggerName:           strings.ToLower(fmt.Sprintf("tg_%s_relay_cascade_update_from_%s_to_%s", relationTable, relayCascadeUpdate.SourceForeignKey, destination.ForeignKey)),
+				RelationTable:         relationTable,
+				FieldToUpdate:         destination.Field,
+				SourceForeignKey:      relayCascadeUpdate.SourceForeignKey,
+				DestinationForeignKey: destination.ForeignKey,
+				Value:                 destination.Value,
+			}
+			generateFromTemplate(templateRelayCascadeUpdate, data.TriggerName, data, v.finalW)
+		}
+	}
+}
+
+func (v *PSQLVisitor) writeCascadeUpdateOnRelatedTable(relationTable string, foreignKey string, cascadeUpdateOnRelatedTables []*psql.CascadeUpdateOnRelatedTable) {
+	for _, cascadeUpdateOnRelatedTable := range cascadeUpdateOnRelatedTables {
 		data := struct {
 			FunctionName  string
 			TriggerName   string
 			RelationTable string
-			Field         string
+			ForeignKey    string
 			FieldToUpdate string
 			Value         string
 		}{
-			//FunctionName: fmt.Sprintf("fn_%s_cascade_update_%s_on_%s", strings.ToLower(t), updates.Field, strings.ToLower(cascade_update.Table)),
-			//TriggerName:  fmt.Sprintf("tg_%s_cascade_update_%s_on_%s", strings.ToLower(t), updates.Field, strings.ToLower(cascade_update.Table)),
+			FunctionName:  strings.ToLower(fmt.Sprintf("fn_%s_cascade_update_on_%s_to_%s", relationTable, foreignKey, cascadeUpdateOnRelatedTable.Field)),
+			TriggerName:   strings.ToLower(fmt.Sprintf("tg_%s_cascade_update_on_%s_to_%s", relationTable, foreignKey, cascadeUpdateOnRelatedTable.Field)),
 			RelationTable: relationTable,
-			Field:         field,
-			FieldToUpdate: cascadeUpdate.Field,
-			Value:         cascadeUpdate.Value,
+			ForeignKey:    foreignKey,
+			FieldToUpdate: cascadeUpdateOnRelatedTable.Field,
+			Value:         cascadeUpdateOnRelatedTable.Value,
 		}
-		//generateFromTemplate(templateCascadeUpdate, data.TriggerName, data, v.finalW)
+		generateFromTemplate(templateCascadeUpdateOnRelatedTable, data.TriggerName, data, v.finalW)
 	}
-}
-
-func writeRelayCascadeUpdate() {
-
 }
 
 func generateFromTemplate(templateText string, templateName string, data interface{}, writer io.Writer) {
@@ -280,6 +303,7 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 	prefixes := make([]string, 0)
 	suffixes := make([]string, 0)
 	constraints := make([]string, 0)
+	relayCascadeUpdates := make([]*psql.RelayCascadeUpdate, 0)
 
 	if ok, err := m.Extension(psql.E_Prefix, &prefixes); ok && err != nil {
 		v.Logf("Error can't retrieve prefix extensions for message %s with error: %s", m.Name().String(), err)
@@ -293,8 +317,11 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 		v.Logf("Error can't retrieve suffix extensions for message %s with error: %s", m.Name().String(), err)
 	}
 
-	if ok, err := m.Extension(psql.E_RelayCascadeUpdate, &re); ok && err != nil {
-		v.Logf("Error can't retrieve suffix extensions for message %s with error: %s", m.Name().String(), err)
+	ok, err = m.Extension(psql.E_RelayCascadeUpdate, &relayCascadeUpdates)
+	if err != nil {
+		v.Logf("Error can't retrieve relay cascades updates options for message %s with error: %s", m.Name().String(), err)
+	} else if ok {
+		v.writeRelayCascadeUpdate(m.Name().String(), relayCascadeUpdates)
 	}
 
 	for _, field := range m.Fields() {
@@ -337,7 +364,7 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 func (v *PSQLVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
 	var column string
 	var auto_fill_value string
-	var cascade_updates []psql.CascadeUpdateOnRelatedTable
+	var cascadeUpdateOnRelatedTables []*psql.CascadeUpdateOnRelatedTable
 
 	ok, err := f.Extension(psql.E_Column, &column)
 	if ok && err == nil {
@@ -349,9 +376,9 @@ func (v *PSQLVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
 		v.writeAutoFillUpdate(f.Message().Name().String(), f.Name().String(), auto_fill_value)
 	}
 
-	ok, err = f.Extension(psql.E_CascadeUpdateOnRelatedTable, &cascade_updates)
+	ok, err = f.Extension(psql.E_CascadeUpdateOnRelatedTable, &cascadeUpdateOnRelatedTables)
 	if ok && err == nil {
-		//v.writeCascadeUpdate(f.Message().Name().String(), f.Name().String(), cascade_updates)
+		v.writeCascadeUpdateOnRelatedTable(f.Message().Name().String(), f.Name().String(), cascadeUpdateOnRelatedTables)
 	}
 
 	return nil, nil
