@@ -282,21 +282,12 @@ func generateIdentifierName(name string, prefixSize int, parameters ...string) (
 		(len(parameters) + 1) - // Number of parameter and checksum '_' separators
 		CHECKSUM_SIZE)
 
-	for i, parameter := range parameters {
-		size := totalParametersSize / len(parameters)
-
-		// Adds the rest of the division to the size of the first parameter
-		// which is usually the table name
-		if i == 0 {
-			size += totalParametersSize % len(parameters)
-		}
-
-		if size > len(parameter) {
-			size = len(parameter)
-		}
-
-		identifier += "_" + parameter[:size]
+	parameterSizeMap := dispatchMaxSizeByParameter(totalParametersSize, parameters...)
+	for _, parameter := range parameters {
+		size := parameterSizeMap[parameter]
+		identifier += fmt.Sprintf("_%s", parameter[:size])
 	}
+
 	checksumData := []byte(identifier)
 	identifier += fmt.Sprintf("_%x", adler32.Checksum(checksumData))
 
@@ -305,6 +296,36 @@ func generateIdentifierName(name string, prefixSize int, parameters ...string) (
 	}
 
 	return strings.ToLower(identifier), nil
+}
+
+func dispatchMaxSizeByParameter(maxSize int, parameters ...string) map[string]int {
+	parameterSizeMap := make(map[string]int)
+	parameterBaseSize := maxSize / len(parameters)
+	rest := maxSize % len(parameters)
+
+	// Add to the rest when the parameter is shorter than the parameter max size.
+	for _, parameter := range parameters {
+		if parameterBaseSize > len(parameter) {
+			rest += parameterBaseSize - len(parameter)
+		}
+	}
+
+	// Dispatch the rest over the parameters in slice order
+	for _, parameter := range parameters {
+		size := parameterBaseSize + rest
+
+		if size > len(parameter) {
+			// remove the rest that is used for this parameter
+			if parameterBaseSize <= len(parameter) {
+				rest = size - len(parameter)
+			}
+			size = len(parameter)
+		} else {
+			rest = 0
+		}
+		parameterSizeMap[parameter] = size
+	}
+	return parameterSizeMap
 }
 
 func getStringBufferWithHeader(buf *bytes.Buffer, fileName string) (string, int) {
