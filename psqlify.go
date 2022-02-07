@@ -265,7 +265,7 @@ func generateCascadeIdentifierNames(name string, parameters ...string) (fnName s
 	return
 }
 
-// Generate a unique postgresql identifier name which can be used as function or trigger names
+// generate a unique and valid postgresql identifier name which can be used as function or trigger names
 func generateIdentifierName(name string, prefixSize int, parameters ...string) (string, error) {
 	const MAX_PSQL_IDENTIFIER_SIZE = 63
 	const CHECKSUM_SIZE = 8
@@ -279,23 +279,27 @@ func generateIdentifierName(name string, prefixSize int, parameters ...string) (
 	totalParametersSize := (MAX_PSQL_IDENTIFIER_SIZE -
 		len(name) -
 		prefixSize -
-		(len(parameters) + 1) - // Number of parameter and checksum '_' separators
+		(len(parameters) + 1) - // number of parameter and checksum '_' separators
 		CHECKSUM_SIZE)
 
+	// iterate over parameters instead of parameterSizeMap to keep a consistant order (hashmap is unordered).
 	parameterSizeMap := dispatchMaxSizeByParameter(totalParametersSize, parameters...)
 	for _, parameter := range parameters {
 		size := parameterSizeMap[parameter]
 		identifier += fmt.Sprintf("_%s", parameter[:size])
 	}
 
-	checksumData := []byte(identifier)
+	// compute the checksum over all non-truncated parameters to avoid collision
+	checksumData := []byte(strings.Join(parameters, "-"))
 	identifier += fmt.Sprintf("_%x", adler32.Checksum(checksumData))
+
+	identifier = strings.ToLower(identifier)
 
 	if prefixSize+len(identifier) > 63 {
 		return "", fmt.Errorf("generated identifier '%s' with prefixSize is too long, this should never happen", identifier)
 	}
 
-	return strings.ToLower(identifier), nil
+	return identifier, nil
 }
 
 func dispatchMaxSizeByParameter(maxSize int, parameters ...string) map[string]int {
