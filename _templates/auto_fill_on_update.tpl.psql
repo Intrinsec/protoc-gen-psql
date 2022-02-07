@@ -1,11 +1,44 @@
-
-CREATE OR REPLACE FUNCTION {{ .FunctionName }}()
-    RETURNS trigger
+CREATE OR REPLACE FUNCTION {{.CreateFunctionName }}()
+    RETURNS boolean
     LANGUAGE plpgsql
-AS $$
+    AS $fn_create_trigger$
+DECLARE
+    primary_key text;
 BEGIN
-    NEW.{{ .Field }} := {{ .Value }}; RETURN NEW;
+    SELECT
+        kcu.column_name INTO primary_key
+    FROM
+        information_schema.key_column_usage AS kcu
+    WHERE
+        kcu.table_name = lower('{{ .Table }}')
+        AND kcu.constraint_name LIKE '%_pkey';
+
+    EXECUTE FORMAT($format_function$
+        CREATE OR REPLACE FUNCTION {{.FunctionName }}()
+            RETURNS TRIGGER
+            LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            UPDATE
+                {{.Table }}
+            SET
+                {{.Field }} = {{.Value }}
+            WHERE
+                %1$I = NEW.%1$I;
+            RETURN NEW;
+        END $$;
+    $format_function$, primary_key);
+    
+    DROP TRIGGER IF EXISTS {{.TriggerName }} ON {{.Table }};
+
+    CREATE TRIGGER {{.TriggerName }}
+        AFTER UPDATE ON {{.Table }}
+        FOR EACH ROW
+        WHEN (OLD IS DISTINCT FROM NEW )
+        EXECUTE FUNCTION {{.FunctionName }}();
+    
+    RETURN NULL;
 END
-$$;
-DROP TRIGGER IF EXISTS {{ .TriggerName }} ON {{ .Table }};
-CREATE TRIGGER {{ .TriggerName }} BEFORE UPDATE ON {{ .Table }} FOR EACH ROW WHEN (OLD IS DISTINCT FROM NEW) EXECUTE FUNCTION {{ .FunctionName }}();
+$fn_create_trigger$;
+
+SELECT {{ .CreateFunctionName }}();

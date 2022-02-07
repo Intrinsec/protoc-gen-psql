@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION fn_create_{{ .TriggerName }}()
+CREATE OR REPLACE FUNCTION {{ .CreateFunctionName }}()
 	RETURNS boolean
 	LANGUAGE plpgsql
 AS $fn_create_trigger$
@@ -7,16 +7,39 @@ DECLARE
 	src_pk_column_name TEXT;
 	dst_table_name TEXT;
 	dst_pk_column_name TEXT;
+	dst_pk_data_type TEXT;
 BEGIN
-	SELECT kcu2.table_name, kcu2.column_name INTO src_table_name, src_pk_column_name FROM information_schema.key_column_usage AS kcu
-	INNER JOIN information_schema.referential_constraints AS rc ON rc.constraint_name = kcu.constraint_name
-	INNER JOIN information_schema.key_column_usage AS kcu2 ON kcu2.constraint_name = rc.unique_constraint_name
-	WHERE kcu.table_name = lower('{{ .RelationTable }}') AND kcu.column_name = '{{ .SourceForeignKey }}' AND kcu.constraint_name LIKE '%_fkey';
+	SELECT
+		kcu2.table_name,
+		kcu2.column_name INTO src_table_name,
+		src_pk_column_name
+	FROM
+		information_schema.key_column_usage AS kcu
+		INNER JOIN information_schema.referential_constraints AS rc ON rc.constraint_name = kcu.constraint_name
+		INNER JOIN information_schema.key_column_usage AS kcu2 ON kcu2.constraint_name = rc.unique_constraint_name
+	WHERE
+		kcu.table_name = lower('{{ .RelationTable }}')
+		AND kcu.column_name = '{{ .SourceForeignKey }}'
+		AND kcu.constraint_name LIKE '%_fkey';
 
-	SELECT kcu2.table_name, kcu2.column_name INTO dst_table_name, dst_pk_column_name FROM information_schema.key_column_usage AS kcu
-	INNER JOIN information_schema.referential_constraints AS rc ON rc.constraint_name = kcu.constraint_name
-	INNER JOIN information_schema.key_column_usage AS kcu2 ON kcu2.constraint_name = rc.unique_constraint_name
-	WHERE kcu.table_name = lower('{{ .RelationTable }}') AND kcu.column_name = '{{ .DestinationForeignKey }}' AND kcu.constraint_name LIKE '%_fkey';
+	SELECT
+	DISTINCT ON (kcu2.table_name, kcu2.column_name)
+		kcu2.table_name,
+		kcu2.column_name,
+		c.data_type
+	INTO
+		dst_table_name,
+		dst_pk_column_name,
+		dst_pk_data_type
+	FROM
+		information_schema.key_column_usage AS kcu
+		INNER JOIN information_schema.referential_constraints AS rc ON rc.constraint_name = kcu.constraint_name
+		INNER JOIN information_schema.key_column_usage AS kcu2 ON kcu2.constraint_name = rc.unique_constraint_name
+		INNER JOIN information_schema.columns AS c ON c.column_name = kcu2.column_name
+	WHERE
+		kcu.table_name = lower('{{ .RelationTable }}')
+		AND kcu.column_name = '{{ .DestinationForeignKey }}'
+		AND kcu.constraint_name LIKE '%_fkey';
 
 	EXECUTE FORMAT($format_function$
 		CREATE OR REPLACE FUNCTION {{ .FunctionName }}()
@@ -24,9 +47,8 @@ BEGIN
 			LANGUAGE plpgsql
 		AS $$
 		DECLARE
-			table_pk record;
+			table_pk %4$I;
 		BEGIN
-
 			IF (TG_OP IN ('DELETE', 'UPDATE')) THEN
 				table_pk = (SELECT {{ .DestinationForeignKey}} FROM {{ .RelationTable }} WHERE {{ .SourceForeignKey }} = OLD.%1$I);
 				UPDATE %2$I SET {{ .FieldToUpdate }} = {{ .Value }} WHERE %3$I = table_pk;
@@ -40,7 +62,7 @@ BEGIN
 			RETURN NULL;
 		END
 		$$;
-	$format_function$, src_pk_column_name, dst_table_name, dst_pk_column_name);
+	$format_function$, src_pk_column_name, dst_table_name, dst_pk_column_name, dst_pk_data_type);
 
 	EXECUTE FORMAT('DROP TRIGGER IF EXISTS {{ .TriggerName }} ON %I;', src_table_name);
 
@@ -50,4 +72,4 @@ BEGIN
 END
 $fn_create_trigger$;
 
-SELECT fn_create_{{ .TriggerName }}();
+SELECT {{ .CreateFunctionName }}();

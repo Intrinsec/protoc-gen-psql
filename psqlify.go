@@ -3,6 +3,7 @@ package main
 import (
 	_ "embed"
 	"fmt"
+	"hash/adler32"
 	"io"
 	"strings"
 	"text/template"
@@ -82,28 +83,28 @@ func (p *PSQLModule) generateFiles(
 	v := initPSQLVisitor(p, bufInit, bufFinal, bufDataTable, bufRelationTable, alter)
 	p.CheckErr(pgs.Walk(v, f), "unable to generate psql")
 
-	fileName := f.InputPath().BaseName()
+	filePath := f.InputPath().String()
 	outName := f.InputPath().BaseName() + ".pb.psql"
 
-	if outInit, count := getStringBufferWithHeader(bufInit, fileName); count != 0 {
+	if outInit, count := getStringBufferWithHeader(bufInit, filePath); count != 0 {
 		p.AddGeneratorFile(
 			f.InputPath().SetBase("00_init_").String()+outName,
 			outInit,
 		)
 	}
-	if outFinal, count := getStringBufferWithHeader(bufFinal, fileName); count != 0 {
+	if outFinal, count := getStringBufferWithHeader(bufFinal, filePath); count != 0 {
 		p.AddGeneratorFile(
 			f.InputPath().SetBase("99_final_").String()+outName,
 			outFinal,
 		)
 	}
-	if outTables, count := getStringBufferWithHeader(bufDataTable, fileName); count != 0 {
+	if outTables, count := getStringBufferWithHeader(bufDataTable, filePath); count != 0 {
 		p.AddGeneratorFile(
 			f.InputPath().SetBase("10_tables_").String()+outName,
 			outTables,
 		)
 	}
-	if outRelations, count := getStringBufferWithHeader(bufRelationTable, fileName); count != 0 {
+	if outRelations, count := getStringBufferWithHeader(bufRelationTable, filePath); count != 0 {
 		p.AddGeneratorFile(
 			f.InputPath().SetBase("20_relations_").String()+outName,
 			outRelations,
@@ -146,37 +147,46 @@ func initPSQLVisitor(
 }
 
 // writeAutoFillUpdate write auto fill function and trigger to final psql file
-func (v *PSQLVisitor) writeAutoFillUpdate(t string, field string, value string) {
+func (v *PSQLVisitor) writeAutoFillUpdate(table string, field string, value string) {
+	fnName, tgName, createFnName := generateCascadeIdentifierNames("auto_fill", table, field)
+
 	data := struct {
-		FunctionName string
-		TriggerName  string
-		Table        string
-		Field        string
-		Value        string
+		FunctionName       string
+		TriggerName        string
+		CreateFunctionName string
+		Table              string
+		Field              string
+		Value              string
 	}{
-		FunctionName: fmt.Sprintf("fn_auto_fill_%s_on_%s_update", field, strings.ToLower(t)),
-		TriggerName:  fmt.Sprintf("tg_auto_fill_%s_on_%s_update", field, strings.ToLower(t)),
-		Table:        t,
-		Field:        field,
-		Value:        value,
+		FunctionName:       fnName,
+		TriggerName:        tgName,
+		CreateFunctionName: createFnName,
+		Table:              table,
+		Field:              field,
+		Value:              value,
 	}
 	generateFromTemplate(templateAutoFillOnUpdate, data.TriggerName, data, v.finalW)
 }
 
 func (v *PSQLVisitor) writeRelayCascadeUpdate(relationTable string, relayCascadeUpdates []*psql.RelayCascadeUpdate) {
+
 	for _, relayCascadeUpdate := range relayCascadeUpdates {
 		for _, destination := range relayCascadeUpdate.Destinations {
+			fnName, tgName, createFnName := generateCascadeIdentifierNames("cascade_update", relationTable, relayCascadeUpdate.SourceForeignKey, destination.ForeignKey)
+
 			data := struct {
 				FunctionName          string
 				TriggerName           string
+				CreateFunctionName    string
 				RelationTable         string
 				FieldToUpdate         string
 				SourceForeignKey      string
 				DestinationForeignKey string
 				Value                 string
 			}{
-				FunctionName:          strings.ToLower(fmt.Sprintf("fn_%s_relay_cascade_update_from_%s_to_%s", relationTable, relayCascadeUpdate.SourceForeignKey, destination.ForeignKey)),
-				TriggerName:           strings.ToLower(fmt.Sprintf("tg_%s_relay_cascade_update_from_%s_to_%s", relationTable, relayCascadeUpdate.SourceForeignKey, destination.ForeignKey)),
+				FunctionName:          fnName,
+				TriggerName:           tgName,
+				CreateFunctionName:    createFnName,
 				RelationTable:         relationTable,
 				FieldToUpdate:         destination.Field,
 				SourceForeignKey:      relayCascadeUpdate.SourceForeignKey,
@@ -189,18 +199,22 @@ func (v *PSQLVisitor) writeRelayCascadeUpdate(relationTable string, relayCascade
 }
 
 func (v *PSQLVisitor) writeCascadeUpdateOnRelatedTable(relationTable string, foreignKey string, cascadeUpdateOnRelatedTables []*psql.CascadeUpdateOnRelatedTable) {
+	fnName, tgName, createFnName := generateCascadeIdentifierNames("cascade_related", relationTable, foreignKey)
+
 	data := struct {
-		FunctionName  string
-		TriggerName   string
-		RelationTable string
-		ForeignKey    string
-		Updates       []*psql.CascadeUpdateOnRelatedTable
+		FunctionName       string
+		TriggerName        string
+		CreateFunctionName string
+		RelationTable      string
+		ForeignKey         string
+		Updates            []*psql.CascadeUpdateOnRelatedTable
 	}{
-		FunctionName:  strings.ToLower(fmt.Sprintf("fn_%s_cascade_update_on_%s", relationTable, foreignKey)),
-		TriggerName:   strings.ToLower(fmt.Sprintf("tg_%s_cascade_update_on_%s", relationTable, foreignKey)),
-		RelationTable: relationTable,
-		ForeignKey:    foreignKey,
-		Updates:       cascadeUpdateOnRelatedTables,
+		FunctionName:       fnName,
+		TriggerName:        tgName,
+		CreateFunctionName: createFnName,
+		RelationTable:      relationTable,
+		ForeignKey:         foreignKey,
+		Updates:            cascadeUpdateOnRelatedTables,
 	}
 	generateFromTemplate(templateCascadeUpdateOnRelatedTable, data.TriggerName, data, v.finalW)
 }
@@ -222,6 +236,75 @@ func appendSlices(slices ...[]string) []string {
 		tmp = append(tmp, s...)
 	}
 	return tmp
+}
+
+func generateCascadeIdentifierNames(name string, parameters ...string) (fnName string, tgName string, createFnName string) {
+
+	identifierNames := map[string]string{
+		"fnName":       "fn_",
+		"tgName":       "tg_",
+		"fnCreateName": "fn_create_",
+	}
+	maxPrefixLen := 0
+
+	for _, v := range identifierNames {
+		if len(v) > maxPrefixLen {
+			maxPrefixLen = len(v)
+		}
+	}
+
+	baseIdentifier, err := generateIdentifierName(name, maxPrefixLen, parameters...)
+	if err != nil {
+		panic(err)
+	}
+
+	fnName = identifierNames["fnName"] + baseIdentifier
+	tgName = identifierNames["tgName"] + baseIdentifier
+	createFnName = identifierNames["fnCreateName"] + baseIdentifier
+
+	return
+}
+
+// Generate a unique postgresql identifier name which can be used as function or trigger names
+func generateIdentifierName(name string, prefixSize int, parameters ...string) (string, error) {
+	const MAX_PSQL_IDENTIFIER_SIZE = 63
+	const CHECKSUM_SIZE = 8
+
+	identifier := name
+
+	if prefixSize > 10 {
+		return "", fmt.Errorf("given prefix size %d is longer than 10 characters", prefixSize)
+	}
+
+	totalParametersSize := (MAX_PSQL_IDENTIFIER_SIZE -
+		len(name) -
+		prefixSize -
+		(len(parameters) + 1) - // Number of parameter and checksum '_' separators
+		CHECKSUM_SIZE)
+
+	for i, parameter := range parameters {
+		size := totalParametersSize / len(parameters)
+
+		// Adds the rest of the division to the size of the first parameter
+		// which is usually the table name
+		if i == 0 {
+			size += totalParametersSize % len(parameters)
+		}
+
+		if size > len(parameter) {
+			size = len(parameter)
+		}
+
+		identifier += "_" + parameter[:size]
+	}
+	checksumData := []byte(identifier)
+	identifier += fmt.Sprintf("_%x", adler32.Checksum(checksumData))
+
+	if prefixSize+len(identifier) > 63 {
+		return "", fmt.Errorf("generated identifier '%s' with prefixSize is too long, this should never happen", identifier)
+	}
+
+	return strings.ToLower(identifier), nil
 }
 
 func getStringBufferWithHeader(buf *bytes.Buffer, fileName string) (string, int) {

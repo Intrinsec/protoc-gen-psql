@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION fn_create_{{ .TriggerName }}()
+CREATE OR REPLACE FUNCTION {{ .CreateFunctionName }}()
 	RETURNS boolean
 	LANGUAGE plpgsql
 AS $fn_create_trigger$
@@ -6,10 +6,18 @@ DECLARE
 	dst_table_name TEXT;
 	dst_pk_column_name TEXT;
 BEGIN
-	SELECT kcu2.table_name, kcu2.column_name INTO dst_table_name, dst_pk_column_name FROM information_schema.key_column_usage AS kcu
-	INNER JOIN information_schema.referential_constraints AS rc ON rc.constraint_name = kcu.constraint_name
-	INNER JOIN information_schema.key_column_usage AS kcu2 ON kcu2.constraint_name = rc.unique_constraint_name
-	WHERE kcu.table_name = lower('{{ .RelationTable }}') AND kcu.column_name = '{{ .ForeignKey }}' AND kcu.constraint_name LIKE '%_fkey';
+	SELECT
+		kcu2.table_name,
+		kcu2.column_name INTO dst_table_name,
+		dst_pk_column_name
+	FROM
+		information_schema.key_column_usage AS kcu
+		INNER JOIN information_schema.referential_constraints AS rc ON rc.constraint_name = kcu.constraint_name
+		INNER JOIN information_schema.key_column_usage AS kcu2 ON kcu2.constraint_name = rc.unique_constraint_name
+	WHERE
+		kcu.table_name = lower('{{ .RelationTable }}')
+		AND kcu.column_name = '{{ .ForeignKey }}'
+		AND kcu.constraint_name LIKE '%_fkey';
 
 	EXECUTE FORMAT($format_function$
 		CREATE OR REPLACE FUNCTION {{ .FunctionName }}()
@@ -17,23 +25,22 @@ BEGIN
 			LANGUAGE plpgsql
 		AS $$
 		BEGIN
-
 			IF (TG_OP IN ('DELETE', 'UPDATE')) THEN
-			{{ range $Update := .Updates}}
-				UPDATE %2$I SET {{ $Update.Field }} = {{ $Update.Value }} WHERE %3$I = OLD.{{ $.ForeignKey }};
-			{{ end }}
+			{{- range $Update := .Updates }}
+				UPDATE %1$I SET {{ $Update.Field }} = {{ $Update.Value }} WHERE %2$I = OLD.{{ $.ForeignKey }};
+			{{ end -}}
 			END IF;
 			
 			IF (TG_OP IN ('INSERT', 'UPDATE')) THEN
-			{{ range $Update := .Updates}}
-				UPDATE %2$I SET {{ $Update.Field }} = {{ $Update.Value }} WHERE %3$I = NEW.{{ $.ForeignKey }};
-			{{ end }}
+			{{- range $Update := .Updates }}
+				UPDATE %1$I SET {{ $Update.Field }} = {{ $Update.Value }} WHERE %2$I = NEW.{{ $.ForeignKey }};
+			{{ end -}}
 			END IF;
 
 			RETURN NULL;
 		END
 		$$;
-	$format_function$, src_pk_column_name, dst_table_name, dst_pk_column_name);
+	$format_function$, dst_table_name, dst_pk_column_name);
 
 	DROP TRIGGER IF EXISTS {{ .TriggerName }} ON {{ .RelationTable}};
 
@@ -43,4 +50,4 @@ BEGIN
 END
 $fn_create_trigger$;
 
-SELECT fn_create_{{ .TriggerName }}();
+SELECT {{ .CreateFunctionName }}();
