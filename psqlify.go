@@ -148,7 +148,7 @@ func initPSQLVisitor(
 
 // writeAutoFillUpdate write auto fill function and trigger to final psql file
 func (v *PSQLVisitor) writeAutoFillUpdate(table string, field string, value string) {
-	fnName, tgName, createFnName := generateCascadeIdentifierNames("auto_fill", table, field)
+	fnName, tgName, _, createFnName := generateCascadeIdentifierNames("auto_fill", table, field)
 
 	data := struct {
 		FunctionName       string
@@ -172,11 +172,12 @@ func (v *PSQLVisitor) writeRelayCascadeUpdate(relationTable string, relayCascade
 
 	for _, relayCascadeUpdate := range relayCascadeUpdates {
 		for _, destination := range relayCascadeUpdate.Destinations {
-			fnName, tgName, createFnName := generateCascadeIdentifierNames("cascade_update", relationTable, relayCascadeUpdate.SourceForeignKey, destination.ForeignKey)
+			fnName, tgName, tgDelName, createFnName := generateCascadeIdentifierNames("relay_cascade", relationTable, relayCascadeUpdate.SourceForeignKey, destination.ForeignKey)
 
 			data := struct {
 				FunctionName          string
 				TriggerName           string
+				TriggerDelName        string
 				CreateFunctionName    string
 				RelationTable         string
 				FieldToUpdate         string
@@ -186,6 +187,7 @@ func (v *PSQLVisitor) writeRelayCascadeUpdate(relationTable string, relayCascade
 			}{
 				FunctionName:          fnName,
 				TriggerName:           tgName,
+				TriggerDelName:        tgDelName,
 				CreateFunctionName:    createFnName,
 				RelationTable:         relationTable,
 				FieldToUpdate:         destination.Field,
@@ -199,11 +201,12 @@ func (v *PSQLVisitor) writeRelayCascadeUpdate(relationTable string, relayCascade
 }
 
 func (v *PSQLVisitor) writeCascadeUpdateOnRelatedTable(relationTable string, foreignKey string, cascadeUpdateOnRelatedTables []*psql.CascadeUpdateOnRelatedTable) {
-	fnName, tgName, createFnName := generateCascadeIdentifierNames("cascade_related", relationTable, foreignKey)
+	fnName, tgName, tgDelName, createFnName := generateCascadeIdentifierNames("cascade_related", relationTable, foreignKey)
 
 	data := struct {
 		FunctionName       string
 		TriggerName        string
+		TriggerDelName     string
 		CreateFunctionName string
 		RelationTable      string
 		ForeignKey         string
@@ -211,6 +214,7 @@ func (v *PSQLVisitor) writeCascadeUpdateOnRelatedTable(relationTable string, for
 	}{
 		FunctionName:       fnName,
 		TriggerName:        tgName,
+		TriggerDelName:     tgDelName,
 		CreateFunctionName: createFnName,
 		RelationTable:      relationTable,
 		ForeignKey:         foreignKey,
@@ -238,11 +242,12 @@ func appendSlices(slices ...[]string) []string {
 	return tmp
 }
 
-func generateCascadeIdentifierNames(name string, parameters ...string) (fnName string, tgName string, createFnName string) {
+func generateCascadeIdentifierNames(name string, parameters ...string) (fnName string, tgName string, tgDelName string, createFnName string) {
 
 	identifierNames := map[string]string{
 		"fnName":       "fn_",
 		"tgName":       "tg_",
+		"tgDelName":    "tg_del_",
 		"fnCreateName": "fn_create_",
 	}
 	maxPrefixLen := 0
@@ -260,6 +265,7 @@ func generateCascadeIdentifierNames(name string, parameters ...string) (fnName s
 
 	fnName = identifierNames["fnName"] + baseIdentifier
 	tgName = identifierNames["tgName"] + baseIdentifier
+	tgDelName = identifierNames["tgDelName"] + baseIdentifier
 	createFnName = identifierNames["fnCreateName"] + baseIdentifier
 
 	return

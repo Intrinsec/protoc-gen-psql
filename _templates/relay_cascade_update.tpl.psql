@@ -7,67 +7,80 @@ DECLARE
 	src_pk_column_name TEXT;
 	dst_table_name TEXT;
 	dst_pk_column_name TEXT;
-	dst_pk_data_type TEXT;
+	t timestamptz := clock_timestamp();
 BEGIN
+	WITH kcu_all AS (
+		SELECT
+			kcu.column_name AS fk_column_name,
+			kcu2.column_name AS column_name,
+			kcu2.table_name AS table_name
+		FROM
+			information_schema.key_column_usage AS kcu
+			INNER JOIN information_schema.referential_constraints AS rc ON rc.constraint_name = kcu.constraint_name
+			INNER JOIN information_schema.key_column_usage AS kcu2 ON kcu2.constraint_name = rc.unique_constraint_name
+		WHERE
+			kcu.table_name = lower('{{ .RelationTable }}')
+			AND kcu.constraint_name LIKE '%_fkey'
+			AND (kcu.column_name = '{{ .SourceForeignKey }}' OR kcu.column_name = '{{ .DestinationForeignKey }}')
+	),
+	src AS (
+		SELECT
+			column_name AS src_column_name,
+			table_name AS src_table_name
+		FROM
+			kcu_all
+		WHERE
+			fk_column_name = '{{ .SourceForeignKey }}'
+	),
+	dst AS (
+		SELECT
+			column_name AS dst_column_name,
+			table_name AS dst_table_name
+		FROM kcu_all
+		WHERE
+			fk_column_name = '{{ .DestinationForeignKey }}'
+	)
 	SELECT
-		kcu2.table_name,
-		kcu2.column_name INTO src_table_name,
-		src_pk_column_name
-	FROM
-		information_schema.key_column_usage AS kcu
-		INNER JOIN information_schema.referential_constraints AS rc ON rc.constraint_name = kcu.constraint_name
-		INNER JOIN information_schema.key_column_usage AS kcu2 ON kcu2.constraint_name = rc.unique_constraint_name
-	WHERE
-		kcu.table_name = lower('{{ .RelationTable }}')
-		AND kcu.column_name = '{{ .SourceForeignKey }}'
-		AND kcu.constraint_name LIKE '%_fkey';
-
-	SELECT
-	DISTINCT ON (kcu2.table_name, kcu2.column_name)
-		kcu2.table_name,
-		kcu2.column_name,
-		c.data_type
+		src.src_table_name,
+		src.src_column_name,
+		dst.dst_table_name,
+		dst.dst_column_name
 	INTO
+		src_table_name,
+		src_pk_column_name,
 		dst_table_name,
-		dst_pk_column_name,
-		dst_pk_data_type
-	FROM
-		information_schema.key_column_usage AS kcu
-		INNER JOIN information_schema.referential_constraints AS rc ON rc.constraint_name = kcu.constraint_name
-		INNER JOIN information_schema.key_column_usage AS kcu2 ON kcu2.constraint_name = rc.unique_constraint_name
-		INNER JOIN information_schema.columns AS c ON c.column_name = kcu2.column_name
-	WHERE
-		kcu.table_name = lower('{{ .RelationTable }}')
-		AND kcu.column_name = '{{ .DestinationForeignKey }}'
-		AND kcu.constraint_name LIKE '%_fkey';
+		dst_pk_column_name
+	FROM src
+	CROSS JOIN dst;
 
 	EXECUTE FORMAT($format_function$
 		CREATE OR REPLACE FUNCTION {{ .FunctionName }}()
 			RETURNS trigger
 			LANGUAGE plpgsql
+			SECURITY DEFINER
 		AS $$
-		DECLARE
-			table_pk %4$I;
 		BEGIN
 			IF (TG_OP IN ('DELETE', 'UPDATE')) THEN
-				table_pk = (SELECT {{ .DestinationForeignKey}} FROM {{ .RelationTable }} WHERE {{ .SourceForeignKey }} = OLD.%1$I);
-				UPDATE %2$I SET {{ .FieldToUpdate }} = {{ .Value }} WHERE %3$I = table_pk;
+				UPDATE %2$I SET {{ .FieldToUpdate }} = {{ .Value }} WHERE %3$I = (SELECT {{ .DestinationForeignKey}} FROM {{ .RelationTable }} WHERE {{ .SourceForeignKey }} = OLD.%1$I);
 			END IF;
 			
 			IF (TG_OP IN ('INSERT', 'UPDATE')) THEN
-				table_pk = (SELECT {{ .DestinationForeignKey}} FROM {{ .RelationTable }} WHERE {{ .SourceForeignKey }} = NEW.%1$I);
-				UPDATE %2$I SET {{ .FieldToUpdate }} = {{ .Value }} WHERE %3$I = table_pk;
+				UPDATE %2$I SET {{ .FieldToUpdate }} = {{ .Value }} WHERE %3$I = (SELECT {{ .DestinationForeignKey}} FROM {{ .RelationTable }} WHERE {{ .SourceForeignKey }} = NEW.%1$I);
 			END IF;
 
 			RETURN NULL;
 		END
 		$$;
-	$format_function$, src_pk_column_name, dst_table_name, dst_pk_column_name, dst_pk_data_type);
+	$format_function$, src_pk_column_name, dst_table_name, dst_pk_column_name);
 
 	EXECUTE FORMAT('DROP TRIGGER IF EXISTS {{ .TriggerName }} ON %I;', src_table_name);
 
-	EXECUTE FORMAT('CREATE TRIGGER {{ .TriggerName }} AFTER INSERT OR DELETE OR UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION {{ .FunctionName }}();', src_table_name);
+	EXECUTE FORMAT('DROP TRIGGER IF EXISTS {{ .TriggerDelName }} ON %I;', src_table_name);
 
+	EXECUTE FORMAT('CREATE TRIGGER {{ .TriggerName }} AFTER INSERT OR UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION {{ .FunctionName }}();', src_table_name);
+
+	EXECUTE FORMAT('CREATE CONSTRAINT TRIGGER {{ .TriggerDelName }} AFTER DELETE ON %I DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION {{ .FunctionName }}();', src_table_name);
+	
 	RETURN NULL;
 END
 $fn_create_trigger$;

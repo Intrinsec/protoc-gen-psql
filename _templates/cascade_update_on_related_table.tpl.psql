@@ -5,10 +5,13 @@ AS $fn_create_trigger$
 DECLARE
 	dst_table_name TEXT;
 	dst_pk_column_name TEXT;
+	t timestamptz := clock_timestamp();
 BEGIN
 	SELECT
 		kcu2.table_name,
-		kcu2.column_name INTO dst_table_name,
+		kcu2.column_name
+	INTO
+		dst_table_name,
 		dst_pk_column_name
 	FROM
 		information_schema.key_column_usage AS kcu
@@ -16,13 +19,14 @@ BEGIN
 		INNER JOIN information_schema.key_column_usage AS kcu2 ON kcu2.constraint_name = rc.unique_constraint_name
 	WHERE
 		kcu.table_name = lower('{{ .RelationTable }}')
-		AND kcu.column_name = '{{ .ForeignKey }}'
-		AND kcu.constraint_name LIKE '%_fkey';
-
+		AND kcu.constraint_name LIKE '%_fkey'
+		AND kcu.column_name = '{{ .ForeignKey }}';
+	
 	EXECUTE FORMAT($format_function$
 		CREATE OR REPLACE FUNCTION {{ .FunctionName }}()
 			RETURNS trigger
 			LANGUAGE plpgsql
+			SECURITY DEFINER
 		AS $$
 		BEGIN
 			IF (TG_OP IN ('DELETE', 'UPDATE')) THEN
@@ -44,7 +48,18 @@ BEGIN
 
 	DROP TRIGGER IF EXISTS {{ .TriggerName }} ON {{ .RelationTable}};
 
-	CREATE TRIGGER {{ .TriggerName }} AFTER INSERT OR DELETE OR UPDATE ON {{ .RelationTable }} FOR EACH ROW EXECUTE FUNCTION {{ .FunctionName }}();
+	DROP TRIGGER IF EXISTS {{ .TriggerDelName }} ON {{ .RelationTable}};
+
+	CREATE TRIGGER {{ .TriggerName }}
+		AFTER INSERT OR UPDATE ON {{ .RelationTable }}
+		FOR EACH ROW
+		EXECUTE FUNCTION {{ .FunctionName }}();
+	
+	CREATE CONSTRAINT TRIGGER {{ .TriggerDelName }}
+		AFTER DELETE ON {{ .RelationTable }}
+		DEFERRABLE INITIALLY DEFERRED
+		FOR EACH ROW
+		EXECUTE FUNCTION {{ .FunctionName }}();
 
 	RETURN NULL;
 END
