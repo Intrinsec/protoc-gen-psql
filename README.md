@@ -30,15 +30,20 @@ Other remaining options defines what statements will be contained in the table d
 - `suffix`: these strings will be set at the end of the creation table definition.
 - `constraint`: this option enable defining constraints on the table. This option will handle error if the constraint already exist in the schema.
 - `disabled`: this boolean indicates the message should be ignored. If other options are used in this message, they will be ignored.
+- `relay_cascade_update`: create a trigger after insert, delete and update on the `source_foreign_key` parent table to update the given field on destination foreign key parent tables:
+  - `source_foreign_key`: source foreign key
+  - `destinations`: List of destinations to update:
+    - `foreign_key`: destination foreign key
+    - `field`: field to update on parent table
+    - `value`: value to set. The given value can be a function (ex: now())
 
 ### At field level
 
 - `column`: let describe how the field should be represented in the schema.
 - `auto_fill_on_update`: create a trigger to update this field with the given value each time the table is updated. The given value can be a function (ex: now()).
-- `cascade_update`: create a trigger to update other fields from another table each time the table is updated. This option must be set on the foreign key of the table to update:
-    - `table`: table to update
-    - `key`: table primary key which must contains the foreign key value
-    - `updates`: List of fields to update with the associated value to set (ex.: [{field: "update_time", value: "now()"}]).
+- `cascade_update_on_related_table`: create a trigger to update other fields from another table each time the table is updated. This option must be set on the foreign key of the table to update and can be set multiple time to update various fields. This option has 2 parameters to set:
+  - `field`: field to update on the parent table
+  - `value`: value to set. The given value can be a function (ex: now()).
 
 ## PSQL files naming convention
 
