@@ -29,15 +29,25 @@ BEGIN
 			SECURITY DEFINER
 		AS $$
 		BEGIN
-			IF (TG_OP IN ('DELETE', 'UPDATE')) THEN
+			IF TG_OP IN ('DELETE', 'UPDATE') THEN
 			{{- range $Update := .Updates }}
-				UPDATE %1$I SET {{ $Update.Field }} = {{ $Update.Value }} WHERE %2$I = OLD.{{ $.ForeignKey }};
+				UPDATE
+					%1$I
+				SET
+					{{ $Update.Field }} = {{ $Update.Value }}
+				WHERE
+					%2$I = OLD.{{ $.ForeignKey }};
 			{{ end -}}
 			END IF;
 			
-			IF (TG_OP IN ('INSERT', 'UPDATE')) THEN
+			IF TG_OP IN ('INSERT', 'UPDATE') THEN
 			{{- range $Update := .Updates }}
-				UPDATE %1$I SET {{ $Update.Field }} = {{ $Update.Value }} WHERE %2$I = NEW.{{ $.ForeignKey }};
+				UPDATE
+					%1$I
+				SET
+					{{ $Update.Field }} = {{ $Update.Value }}
+				WHERE
+					%2$I = NEW.{{ $.ForeignKey }};
 			{{ end -}}
 			END IF;
 

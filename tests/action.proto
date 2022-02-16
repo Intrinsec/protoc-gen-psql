@@ -62,16 +62,16 @@ message EntityAction {
     option (psql.tableType) = RELATION;
 
     option (psql.relay_cascade_update) = {
-        source_foreign_key : "action_uuid",
+        source_foreign_key : "action_uuid"
         destinations: [       
             {
                 foreign_key: "incident_uuid"
-                field: "update_time",
-                value: "now()",
+                field: "update_time"
+                value: "now()"
             },
             {
                 foreign_key: "communication_uuid"
-                field: "update_time",
+                field: "update_time"
                 value: "10"
             }
         ]

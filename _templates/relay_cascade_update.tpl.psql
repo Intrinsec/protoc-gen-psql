@@ -60,12 +60,22 @@ BEGIN
 			SECURITY DEFINER
 		AS $$
 		BEGIN
-			IF (TG_OP IN ('DELETE', 'UPDATE')) THEN
-				UPDATE %2$I SET {{ .FieldToUpdate }} = {{ .Value }} WHERE %3$I = (SELECT {{ .DestinationForeignKey}} FROM {{ .RelationTable }} WHERE {{ .SourceForeignKey }} = OLD.%1$I);
+			IF TG_OP IN ('DELETE', 'UPDATE') THEN
+				UPDATE
+					%2$I
+				SET
+					{{ .FieldToUpdate }} = {{ .Value }}
+				WHERE
+					%3$I = (SELECT {{ .DestinationForeignKey}} FROM {{ .RelationTable }} WHERE {{ .SourceForeignKey }} = OLD.%1$I);
 			END IF;
 			
-			IF (TG_OP IN ('INSERT', 'UPDATE')) THEN
-				UPDATE %2$I SET {{ .FieldToUpdate }} = {{ .Value }} WHERE %3$I = (SELECT {{ .DestinationForeignKey}} FROM {{ .RelationTable }} WHERE {{ .SourceForeignKey }} = NEW.%1$I);
+			IF TG_OP IN ('INSERT', 'UPDATE') THEN
+				UPDATE
+					%2$I
+				SET
+					{{ .FieldToUpdate }} = {{ .Value }}
+				WHERE
+					%3$I = (SELECT {{ .DestinationForeignKey}} FROM {{ .RelationTable }} WHERE {{ .SourceForeignKey }} = NEW.%1$I);
 			END IF;
 
 			RETURN NULL;
