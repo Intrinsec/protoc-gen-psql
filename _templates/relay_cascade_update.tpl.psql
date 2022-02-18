@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION {{ .CreateFunctionName }}()
-	RETURNS boolean
+	RETURNS VOID
 	LANGUAGE plpgsql
 AS $fn_create_trigger$
 DECLARE
@@ -94,8 +94,6 @@ BEGIN
 	EXECUTE FORMAT('CREATE TRIGGER {{ .TriggerName }} AFTER INSERT OR UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION {{ .FunctionName }}();', src_table_name);
 
 	EXECUTE FORMAT('CREATE CONSTRAINT TRIGGER {{ .TriggerDelName }} AFTER DELETE ON %I DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION {{ .FunctionName }}();', src_table_name);
-	
-	RETURN NULL;
 END
 $fn_create_trigger$;
 

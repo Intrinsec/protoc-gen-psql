@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION {{.CreateFunctionName }}()
-    RETURNS boolean
+    RETURNS VOID
     LANGUAGE plpgsql
 AS $fn_create_trigger$
 DECLARE
@@ -40,8 +40,6 @@ BEGIN
         FOR EACH ROW
         WHEN (OLD IS DISTINCT FROM NEW)
         EXECUTE FUNCTION {{.FunctionName }}();
-
-    RETURN NULL;
 END
 $fn_create_trigger$;
 
