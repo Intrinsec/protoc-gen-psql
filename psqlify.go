@@ -112,6 +112,11 @@ func (p *PSQLModule) generateFiles(
 	}
 }
 
+func getStringBufferWithHeader(buf *bytes.Buffer, fileName string) (string, int) {
+	out := buf.String()
+	return fmt.Sprintf("-- File: %s\n%s", fileName, out), len(out)
+}
+
 // PSQLVisitor represent a visitor to walk the proto tree and analyse content
 // (File, Messages, Fields, options)
 type PSQLVisitor struct {
@@ -144,203 +149,6 @@ func initPSQLVisitor(
 	}
 	v.Visitor = pgs.PassThroughVisitor(&v)
 	return &v
-}
-
-// writeAutoFillUpdate write auto fill function and trigger to final psql file
-func (v *PSQLVisitor) writeAutoFillUpdate(table string, field string, value string) {
-	fnName, tgName, _, createFnName := generateCascadeIdentifierNames("auto_fill", table, field)
-
-	data := struct {
-		FunctionName       string
-		TriggerName        string
-		CreateFunctionName string
-		Table              string
-		Field              string
-		Value              string
-	}{
-		FunctionName:       fnName,
-		TriggerName:        tgName,
-		CreateFunctionName: createFnName,
-		Table:              table,
-		Field:              field,
-		Value:              value,
-	}
-	generateFromTemplate(templateAutoFillOnUpdate, data.TriggerName, data, v.finalW)
-}
-
-func (v *PSQLVisitor) writeRelayCascadeUpdate(relationTable string, relayCascadeUpdates []*psql.RelayCascadeUpdate) {
-
-	for _, relayCascadeUpdate := range relayCascadeUpdates {
-		for _, destination := range relayCascadeUpdate.Destinations {
-			fnName, tgName, tgDelName, createFnName := generateCascadeIdentifierNames("relay_cascade", relationTable, relayCascadeUpdate.SourceForeignKey, destination.ForeignKey)
-
-			data := struct {
-				FunctionName          string
-				TriggerName           string
-				TriggerDelName        string
-				CreateFunctionName    string
-				RelationTable         string
-				FieldToUpdate         string
-				SourceForeignKey      string
-				DestinationForeignKey string
-				Value                 string
-			}{
-				FunctionName:          fnName,
-				TriggerName:           tgName,
-				TriggerDelName:        tgDelName,
-				CreateFunctionName:    createFnName,
-				RelationTable:         relationTable,
-				FieldToUpdate:         destination.Field,
-				SourceForeignKey:      relayCascadeUpdate.SourceForeignKey,
-				DestinationForeignKey: destination.ForeignKey,
-				Value:                 destination.Value,
-			}
-			generateFromTemplate(templateRelayCascadeUpdate, data.TriggerName, data, v.finalW)
-		}
-	}
-}
-
-func (v *PSQLVisitor) writeCascadeUpdateOnRelatedTable(relationTable string, foreignKey string, cascadeUpdateOnRelatedTables []*psql.CascadeUpdateOnRelatedTable) {
-	fnName, tgName, tgDelName, createFnName := generateCascadeIdentifierNames("cascade_related", relationTable, foreignKey)
-
-	data := struct {
-		FunctionName       string
-		TriggerName        string
-		TriggerDelName     string
-		CreateFunctionName string
-		RelationTable      string
-		ForeignKey         string
-		Updates            []*psql.CascadeUpdateOnRelatedTable
-	}{
-		FunctionName:       fnName,
-		TriggerName:        tgName,
-		TriggerDelName:     tgDelName,
-		CreateFunctionName: createFnName,
-		RelationTable:      relationTable,
-		ForeignKey:         foreignKey,
-		Updates:            cascadeUpdateOnRelatedTables,
-	}
-	generateFromTemplate(templateCascadeUpdateOnRelatedTable, data.TriggerName, data, v.finalW)
-}
-
-func generateFromTemplate(templateText string, templateName string, data interface{}, writer io.Writer) {
-	tmpl, err := template.New(templateName).Funcs(template.FuncMap{"StringsJoin": strings.Join}).Parse(templateText)
-	if err != nil {
-		panic(err)
-	}
-	err = tmpl.Execute(writer, data)
-	if err != nil {
-		panic(err)
-	}
-}
-
-func appendSlices(slices ...[]string) []string {
-	var tmp []string
-	for _, s := range slices {
-		tmp = append(tmp, s...)
-	}
-	return tmp
-}
-
-func generateCascadeIdentifierNames(name string, parameters ...string) (fnName string, tgName string, tgDelName string, createFnName string) {
-
-	identifierNames := map[string]string{
-		"fnName":       "fn_",
-		"tgName":       "tg_",
-		"tgDelName":    "tg_del_",
-		"fnCreateName": "fn_create_",
-	}
-	maxPrefixLen := 0
-
-	for _, v := range identifierNames {
-		if len(v) > maxPrefixLen {
-			maxPrefixLen = len(v)
-		}
-	}
-
-	baseIdentifier, err := generateIdentifierName(name, maxPrefixLen, parameters...)
-	if err != nil {
-		panic(err)
-	}
-
-	fnName = identifierNames["fnName"] + baseIdentifier
-	tgName = identifierNames["tgName"] + baseIdentifier
-	tgDelName = identifierNames["tgDelName"] + baseIdentifier
-	createFnName = identifierNames["fnCreateName"] + baseIdentifier
-
-	return
-}
-
-// generate a unique and valid postgresql identifier name which can be used as function or trigger names
-func generateIdentifierName(name string, prefixSize int, parameters ...string) (string, error) {
-	const MAX_PSQL_IDENTIFIER_SIZE = 63
-	const CHECKSUM_SIZE = 8
-
-	identifier := name
-
-	if prefixSize > 10 {
-		return "", fmt.Errorf("given prefix size %d is longer than 10 characters", prefixSize)
-	}
-
-	totalParametersSize := (MAX_PSQL_IDENTIFIER_SIZE -
-		len(name) -
-		prefixSize -
-		(len(parameters) + 1) - // number of parameter and checksum '_' separators
-		CHECKSUM_SIZE)
-
-	// iterate over parameters instead of parameterSizeMap to keep a consistant order (hashmap is unordered).
-	parameterSizeMap := dispatchMaxSizeByParameter(totalParametersSize, parameters...)
-	for _, parameter := range parameters {
-		size := parameterSizeMap[parameter]
-		identifier += fmt.Sprintf("_%s", parameter[:size])
-	}
-
-	// compute the checksum over all non-truncated parameters to avoid collision
-	checksumData := []byte(strings.Join(parameters, "-"))
-	identifier += fmt.Sprintf("_%x", adler32.Checksum(checksumData))
-
-	identifier = strings.ToLower(identifier)
-
-	if prefixSize+len(identifier) > 63 {
-		return "", fmt.Errorf("generated identifier '%s' with prefixSize is too long, this should never happen", identifier)
-	}
-
-	return identifier, nil
-}
-
-func dispatchMaxSizeByParameter(maxSize int, parameters ...string) map[string]int {
-	parameterSizeMap := make(map[string]int)
-	parameterBaseSize := maxSize / len(parameters)
-	rest := maxSize % len(parameters)
-
-	// Add to the rest when the parameter is shorter than the parameter max size.
-	for _, parameter := range parameters {
-		if parameterBaseSize > len(parameter) {
-			rest += parameterBaseSize - len(parameter)
-		}
-	}
-
-	// Dispatch the rest over the parameters in slice order
-	for _, parameter := range parameters {
-		size := parameterBaseSize + rest
-
-		if size > len(parameter) {
-			// remove the rest that is used for this parameter
-			if parameterBaseSize <= len(parameter) {
-				rest = size - len(parameter)
-			}
-			size = len(parameter)
-		} else {
-			rest = 0
-		}
-		parameterSizeMap[parameter] = size
-	}
-	return parameterSizeMap
-}
-
-func getStringBufferWithHeader(buf *bytes.Buffer, fileName string) (string, int) {
-	out := buf.String()
-	return fmt.Sprintf("-- File: %s\n%s", fileName, out), len(out)
 }
 
 // VisitFile prepare a .psql from a proto one
@@ -470,6 +278,38 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 	return nil, nil
 }
 
+func (v *PSQLVisitor) writeRelayCascadeUpdate(relationTable string, relayCascadeUpdates []*psql.RelayCascadeUpdate) {
+
+	for _, relayCascadeUpdate := range relayCascadeUpdates {
+		for _, destination := range relayCascadeUpdate.Destinations {
+			fnName, tgName, tgDelName, createFnName := generateCascadeIdentifierNames("relay_cascade", relationTable, relayCascadeUpdate.SourceForeignKey, destination.ForeignKey)
+
+			data := struct {
+				FunctionName          string
+				TriggerName           string
+				TriggerDelName        string
+				CreateFunctionName    string
+				RelationTable         string
+				FieldToUpdate         string
+				SourceForeignKey      string
+				DestinationForeignKey string
+				Value                 string
+			}{
+				FunctionName:          fnName,
+				TriggerName:           tgName,
+				TriggerDelName:        tgDelName,
+				CreateFunctionName:    createFnName,
+				RelationTable:         relationTable,
+				FieldToUpdate:         destination.Field,
+				SourceForeignKey:      relayCascadeUpdate.SourceForeignKey,
+				DestinationForeignKey: destination.ForeignKey,
+				Value:                 destination.Value,
+			}
+			generateFromTemplate(templateRelayCascadeUpdate, data.TriggerName, data, v.finalW)
+		}
+	}
+}
+
 // VisitField extract psql related options of a field and generate associated statements
 func (v *PSQLVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
 	var column string
@@ -492,4 +332,164 @@ func (v *PSQLVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
 	}
 
 	return nil, nil
+}
+
+func generateFromTemplate(templateText string, templateName string, data interface{}, writer io.Writer) {
+	tmpl, err := template.New(templateName).Funcs(template.FuncMap{"StringsJoin": strings.Join}).Parse(templateText)
+	if err != nil {
+		panic(err)
+	}
+	err = tmpl.Execute(writer, data)
+	if err != nil {
+		panic(err)
+	}
+}
+
+// writeAutoFillUpdate write auto fill function and trigger to final psql file
+func (v *PSQLVisitor) writeAutoFillUpdate(table string, field string, value string) {
+	fnName, tgName, _, createFnName := generateCascadeIdentifierNames("auto_fill", table, field)
+
+	data := struct {
+		FunctionName       string
+		TriggerName        string
+		CreateFunctionName string
+		Table              string
+		Field              string
+		Value              string
+	}{
+		FunctionName:       fnName,
+		TriggerName:        tgName,
+		CreateFunctionName: createFnName,
+		Table:              table,
+		Field:              field,
+		Value:              value,
+	}
+	generateFromTemplate(templateAutoFillOnUpdate, data.TriggerName, data, v.finalW)
+}
+
+func (v *PSQLVisitor) writeCascadeUpdateOnRelatedTable(relationTable string, foreignKey string, cascadeUpdateOnRelatedTables []*psql.CascadeUpdateOnRelatedTable) {
+	fnName, tgName, tgDelName, createFnName := generateCascadeIdentifierNames("cascade_related", relationTable, foreignKey)
+
+	data := struct {
+		FunctionName       string
+		TriggerName        string
+		TriggerDelName     string
+		CreateFunctionName string
+		RelationTable      string
+		ForeignKey         string
+		Updates            []*psql.CascadeUpdateOnRelatedTable
+	}{
+		FunctionName:       fnName,
+		TriggerName:        tgName,
+		TriggerDelName:     tgDelName,
+		CreateFunctionName: createFnName,
+		RelationTable:      relationTable,
+		ForeignKey:         foreignKey,
+		Updates:            cascadeUpdateOnRelatedTables,
+	}
+	generateFromTemplate(templateCascadeUpdateOnRelatedTable, data.TriggerName, data, v.finalW)
+}
+
+func appendSlices(slices ...[]string) []string {
+	var tmp []string
+	for _, s := range slices {
+		tmp = append(tmp, s...)
+	}
+	return tmp
+}
+
+func generateCascadeIdentifierNames(name string, parameters ...string) (fnName string, tgName string, tgDelName string, createFnName string) {
+
+	identifierNames := map[string]string{
+		"fnName":       "fn_",
+		"tgName":       "tg_",
+		"tgDelName":    "tg_del_",
+		"fnCreateName": "fn_create_",
+	}
+	maxPrefixLen := 0
+
+	for _, v := range identifierNames {
+		if len(v) > maxPrefixLen {
+			maxPrefixLen = len(v)
+		}
+	}
+
+	baseIdentifier, err := generateIdentifierName(name, maxPrefixLen, parameters...)
+	if err != nil {
+		panic(err)
+	}
+
+	fnName = identifierNames["fnName"] + baseIdentifier
+	tgName = identifierNames["tgName"] + baseIdentifier
+	tgDelName = identifierNames["tgDelName"] + baseIdentifier
+	createFnName = identifierNames["fnCreateName"] + baseIdentifier
+
+	return
+}
+
+// generate a unique and valid postgresql identifier name which can be used as function or trigger names
+func generateIdentifierName(name string, prefixSize int, parameters ...string) (string, error) {
+	const MAX_PSQL_IDENTIFIER_SIZE = 63
+	const CHECKSUM_SIZE = 8
+
+	identifier := name
+
+	if prefixSize > 10 {
+		return "", fmt.Errorf("given prefix size %d is longer than 10 characters", prefixSize)
+	}
+
+	totalParametersSize := (MAX_PSQL_IDENTIFIER_SIZE -
+		len(name) -
+		prefixSize -
+		(len(parameters) + 1) - // number of parameter and checksum '_' separators
+		CHECKSUM_SIZE)
+
+	// iterate over parameters instead of parameterSizeMap to keep a consistant order (hashmap is unordered).
+	parameterSizeMap := dispatchMaxSizeByParameter(totalParametersSize, parameters...)
+	for _, parameter := range parameters {
+		size := parameterSizeMap[parameter]
+		identifier += fmt.Sprintf("_%s", parameter[:size])
+	}
+
+	// compute the checksum over all non-truncated parameters to avoid collision
+	checksumData := []byte(strings.Join(parameters, "-"))
+	identifier += fmt.Sprintf("_%x", adler32.Checksum(checksumData))
+
+	identifier = strings.ToLower(identifier)
+
+	if prefixSize+len(identifier) > 63 {
+		return "", fmt.Errorf("generated identifier '%s' with prefixSize is too long, this should never happen", identifier)
+	}
+
+	return identifier, nil
+}
+
+func dispatchMaxSizeByParameter(maxSize int, parameters ...string) map[string]int {
+	parameterSizeMap := make(map[string]int)
+	parameterBaseSize := maxSize / len(parameters)
+	rest := maxSize % len(parameters)
+
+	// Add to the rest when the parameter is shorter than the parameter max size.
+	for _, parameter := range parameters {
+		if parameterBaseSize > len(parameter) {
+			rest += parameterBaseSize - len(parameter)
+		}
+	}
+
+	// Dispatch the rest over the parameters in slice order
+	for _, parameter := range parameters {
+		size := parameterBaseSize + rest
+
+		if size > len(parameter) {
+			// remove the rest that is used for this parameter
+			if parameterBaseSize <= len(parameter) {
+				rest = size - len(parameter)
+			}
+			size = len(parameter)
+		} else {
+			rest = 0
+		}
+		parameterSizeMap[parameter] = size
+	}
+	return parameterSizeMap
 }
