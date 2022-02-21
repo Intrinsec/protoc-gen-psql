@@ -4,23 +4,23 @@
 
 In our application, each time an object is updated, we want its `update_time` field to be updated to `now()` (`auto_fill` option). Moreover, for some complex objects, we want to update its `update_time` when other related objects are updated or even when relation between objects are updated.
 
-An example is available on [tests/action.proto](tests/action.proto), here, an incident is linked to multiple actions and we want to update the incident `update_time` field when one of its action is updated (option `relay_cascade_update`). And, when an action is moved from an incident to another, we also want that both incident `update_time` fields to be updated (`cascade_update_on_related_table`).
+An example is available on [tests/action.proto](tests/action.proto), here, an incident is linked to multiple actions and we want to update the incident `update_time` field when one of its action is updated (option `relay_cascade_update`). And also, when the relation between these two objects is updated. Ex.: an action is moved from an incident to another, we also want that both incident `update_time` fields to be updated (`cascade_update_on_related_table`).
 
 ## Decision
 
 The 3 main solutions identified to solve this problem are:
+
 - Implement the logic directly in our application
-- Recompute the value from the `update_time` fields of the various linked object (works only with soft delete objects)
+- Recompute the value at each read access from the `update_time` fields of the various linked objects (works only with soft delete objects)
 - Create PostgreSQL triggers to update the `update_time` field of the main object.
 
-For our needs, we want to keep as much logic as posible in the database which excludes implementing it at the application level. Moreover, we want read access to our application to be as fast as possible and some of our database objects can be deleted, which excludes to compute this value at each access.
+For our needs, we want to keep as much logic as posible in the database which excludes implementing it at the application level. Moreover, we want read access to our application to be as fast as possible and some of our database objects can be deleted, which excludes to compute this value at each read access.
 
 In our case, the best solution is to create triggers. However, we don't want to have to maintain dozens of almost identical triggers. This is why we want to abstract this by generating triggers from protobuf options.
 
-
 ## Technical explanation
 
-The triggers below address our need to update the `update_time` field of Incident when Action or EntityAction are updated (see. [tests/action.proto](tests/action.proto)):
+The triggers below address our need to update the `update_time` field of Incident when Incident, Action or EntityAction are updated (see. [tests/action.proto](tests/action.proto)):
 
 - to update the incident `update_time` field when the incident is updated:
 
@@ -161,7 +161,7 @@ option (psql.relay_cascade_update) = {
 };
 ```
 
-In conclusion, our solution enables us to have concise cascade update options without adding more complexity on `psql.column` option. But, to avoid sacrifying performance on trigger execution, we had to sacrifice performance at initilization, this slowed down the execution of our functional tests by about 30%.
+In conclusion, our solution enables us to have concise cascade update options without adding more complexity on `psql.column` option. But, to avoid sacrifying performance on trigger execution, we had to sacrifice performance at initilization, which slowed down our functional tests execution by about 30%.
 
 ### Other
 
@@ -169,12 +169,18 @@ In conclusion, our solution enables us to have concise cascade update options wi
 
 `WHEN (OLD IS DISTINCT FROM NEW)` on triggers prevents to trigger a cascade update or an auto_fill when updated object has not change. However, a before trigger will not be able to do this check on tables with generated columns (these columns are not yet generated on the NEW object on before trigger). On the contrary, after triggers do not seem to limit this PostgreSQL features.
 
-### on delete defers triggers
+### Deferrable triggers on delete
 
-FIXME
+An after trigger called during a cascade delete raise a constraint violation errors. Ex. Delete an incident will delete the linked actions (cascade delete). However, when an action is deleted, it will trigger a cacade update to update the `update_time` of the linked incident (`relay_cascade_update` option) which is already deleted.
+
+A deferable trigger which will be executed at the end of the tranaction seems to not have this limitation or at least it fails silently.
+
+It is maybe linked to this explanation from [Before Delete triggers on PostgreSQL documentation](https://www.postgresql.org/docs/9.1/sql-createtrigger.html):
+
+> SQL specifies that BEFORE DELETE triggers on cascaded deletes fire after the cascaded DELETE completes. The PostgreSQL behavior is for BEFORE DELETE to always fire before the delete action, even a cascading one. This is considered more consistent. > There is also nonstandard behavior if BEFORE triggers modify rows or prevent updates during an update that is caused by a referential action. This can lead to constraint violations or stored data that does not honor the referential constraint.
 
 ## Tips
 
 ### Format specifiers with pg_format
 
-pg_format doest not correctly reformat format specifiers (ex.: `%1$I` becomes `% 1$I`) from our generated functions. This can be fixed by adding the following placeholder argument: `pg_format --placeholder '%([0-9]+\$)?-?([0-9]+|\*|(\*[0-9]+\$))?[sIL]'`.
+pg_format does not correctly reformat format specifiers (ex.: `%1$I` becomes `% 1$I`) from our generated functions. This can be fixed by adding the following placeholder argument: `pg_format --placeholder '%([0-9]+\$)?-?([0-9]+|\*|(\*[0-9]+\$))?[sIL]'`.
