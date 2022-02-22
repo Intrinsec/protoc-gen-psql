@@ -27,7 +27,7 @@ func Test_generateIdentifierName(t *testing.T) {
 					"raw_communication_uuid",
 				},
 			},
-			want: "cascade_related_communication_raw_communicat_8f4811f2",
+			want: "cascade_related_communication_raw_communicat_d500eb9",
 		},
 		{
 			name: "3 parameters with first one below max size",
@@ -40,7 +40,7 @@ func Test_generateIdentifierName(t *testing.T) {
 					"incident",
 				},
 			},
-			want: "cascade_related_action_communicatio_incident_90d711f6",
+			want: "cascade_related_action_communicatio_incident_ef530db3",
 		},
 		{
 			name: "3 parameters with first one above max size",
@@ -53,7 +53,7 @@ func Test_generateIdentifierName(t *testing.T) {
 					"incident",
 				},
 			},
-			want: "cascade_related_action_id_communica_incident_8ed411d6",
+			want: "cascade_related_action_id_communica_incident_1a020edf",
 		},
 		{
 			name: "3 parameters, all below or equal to max size",
@@ -66,7 +66,7 @@ func Test_generateIdentifierName(t *testing.T) {
 					"com_uuid",
 				},
 			},
-			want: "cascade_related_id_inc_uuid_com_uuid_b6e0e94",
+			want: "cascade_related_id_inc_uuid_com_uuid_501607cd",
 		},
 	}
 	for _, tt := range tests {

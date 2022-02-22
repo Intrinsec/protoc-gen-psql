@@ -138,7 +138,7 @@ func initPSQLVisitor(
 	relationTableW io.Writer,
 	alter bool,
 ) pgs.Visitor {
-	v := PSQLVisitor{
+	v := &PSQLVisitor{
 		initW:          initW,
 		finalW:         finalW,
 		dataTableW:     dataTableW,
@@ -147,14 +147,13 @@ func initPSQLVisitor(
 		columns:        []string{},
 		alter:          alter,
 	}
-	v.Visitor = pgs.PassThroughVisitor(&v)
-	return &v
+	v.Visitor = pgs.PassThroughVisitor(v)
+	return v
 }
 
 // VisitFile prepare a .psql from a proto one
-// For each messages, call VisitMessage
 func (v *PSQLVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
-	v.Debugf("pssql: Processing file %s", f.Name().String())
+	v.Debugf("psql: Processing file %s", f.Name().String())
 
 	initializations := make([]string, 0)
 	finalizations := make([]string, 0)
@@ -181,7 +180,7 @@ func (v *PSQLVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
 		}
 	}
 
-	return initPSQLVisitor(v, v.initW, v.finalW, v.dataTableW, v.relationTableW, v.alter), nil
+	return v, nil
 }
 
 // VisitMessage extract psql related options of a messages and generate associated statements
@@ -215,7 +214,7 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 		v.Debug("Table Type: RELATION")
 		w = &v.relationTableW
 	default:
-		w = &v.dataTableW
+		v.Failf("the enum value %v is not handle by the plugin", tableType)
 	}
 
 	prefixes := make([]string, 0)
@@ -237,7 +236,7 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 
 	ok, err = m.Extension(psql.E_RelayCascadeUpdate, &relayCascadeUpdates)
 	if err != nil {
-		v.Logf("Error can't retrieve relay cascades updates options for message %s with error: %s", m.Name().String(), err)
+		v.Logf("Error can't retrieve relay cascade updates options for message %s with error: %s", m.Name().String(), err)
 	} else if ok {
 		v.writeRelayCascadeUpdate(m.Name().String(), relayCascadeUpdates)
 	}
@@ -279,10 +278,9 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 }
 
 func (v *PSQLVisitor) writeRelayCascadeUpdate(relationTable string, relayCascadeUpdates []*psql.RelayCascadeUpdate) {
-
 	for _, relayCascadeUpdate := range relayCascadeUpdates {
 		for _, destination := range relayCascadeUpdate.Destinations {
-			fnName, tgName, tgDelName, createFnName := generateCascadeIdentifierNames("relay_cascade", relationTable, relayCascadeUpdate.SourceForeignKey, destination.ForeignKey)
+			fnIdName, tgIdName, tgDelIdName, createFnIdName := generateCascadeIdentifierNames("relay_cascade", relationTable, relayCascadeUpdate.SourceForeignKey, destination.ForeignKey)
 
 			data := struct {
 				FunctionName          string
@@ -295,10 +293,10 @@ func (v *PSQLVisitor) writeRelayCascadeUpdate(relationTable string, relayCascade
 				DestinationForeignKey string
 				Value                 string
 			}{
-				FunctionName:          fnName,
-				TriggerName:           tgName,
-				TriggerDelName:        tgDelName,
-				CreateFunctionName:    createFnName,
+				FunctionName:          fnIdName,
+				TriggerName:           tgIdName,
+				TriggerDelName:        tgDelIdName,
+				CreateFunctionName:    createFnIdName,
 				RelationTable:         relationTable,
 				FieldToUpdate:         destination.Field,
 				SourceForeignKey:      relayCascadeUpdate.SourceForeignKey,
@@ -398,7 +396,7 @@ func appendSlices(slices ...[]string) []string {
 	return tmp
 }
 
-func generateCascadeIdentifierNames(name string, parameters ...string) (fnName string, tgName string, tgDelName string, createFnName string) {
+func generateCascadeIdentifierNames(name string, parameters ...string) (fnIdName string, tgIdName string, tgDelIdName string, createFnIdName string) {
 
 	identifierNames := map[string]string{
 		"fnName":       "fn_",
@@ -419,33 +417,36 @@ func generateCascadeIdentifierNames(name string, parameters ...string) (fnName s
 		panic(err)
 	}
 
-	fnName = identifierNames["fnName"] + baseIdentifier
-	tgName = identifierNames["tgName"] + baseIdentifier
-	tgDelName = identifierNames["tgDelName"] + baseIdentifier
-	createFnName = identifierNames["fnCreateName"] + baseIdentifier
+	fnIdName = identifierNames["fnName"] + baseIdentifier
+	tgIdName = identifierNames["tgName"] + baseIdentifier
+	tgDelIdName = identifierNames["tgDelName"] + baseIdentifier
+	createFnIdName = identifierNames["fnCreateName"] + baseIdentifier
 
 	return
 }
 
-// generate a unique and valid postgresql identifier name which can be used as function or trigger names
+// generateIdentifierName generates a unique and valid postgresql identifier name which can be used as function or trigger names
+// PostgreSQL truncate identifier name if they exceed a given length. We try to generate the best readable identifier while
+// respecting this constraint.
 func generateIdentifierName(name string, prefixSize int, parameters ...string) (string, error) {
 	const MAX_PSQL_IDENTIFIER_SIZE = 63
+	const MAX_PREFIXE_SIZE = 10 // value chosen empirically to suit our use case
 	const CHECKSUM_SIZE = 8
 
 	identifier := name
 
-	if prefixSize > 10 {
-		return "", fmt.Errorf("given prefix size %d is longer than 10 characters", prefixSize)
+	if prefixSize > MAX_PREFIXE_SIZE {
+		return "", fmt.Errorf("given prefix size %d is longer than %d characters", prefixSize, MAX_PREFIXE_SIZE)
 	}
 
 	totalParametersSize := (MAX_PSQL_IDENTIFIER_SIZE -
 		len(name) -
 		prefixSize -
-		(len(parameters) + 1) - // number of parameter and checksum '_' separators
+		(len(parameters) + 1) - // number of parameters and checksum '_' separators
 		CHECKSUM_SIZE)
 
+	parameterSizeMap := allocateRoomToParameters(totalParametersSize, parameters...)
 	// iterate over parameters instead of parameterSizeMap to keep a consistant order (hashmap is unordered).
-	parameterSizeMap := dispatchMaxSizeByParameter(totalParametersSize, parameters...)
 	for _, parameter := range parameters {
 		size := parameterSizeMap[parameter]
 		identifier += fmt.Sprintf("_%s", parameter[:size])
@@ -457,39 +458,46 @@ func generateIdentifierName(name string, prefixSize int, parameters ...string) (
 
 	identifier = strings.ToLower(identifier)
 
-	if prefixSize+len(identifier) > 63 {
+	if prefixSize+len(identifier) > MAX_PSQL_IDENTIFIER_SIZE {
 		return "", fmt.Errorf("generated identifier '%s' with prefixSize is too long, this should never happen", identifier)
 	}
 
 	return identifier, nil
 }
 
-func dispatchMaxSizeByParameter(maxSize int, parameters ...string) map[string]int {
+// allocateRoomToParameters allocate a reasonable size per given parameter based on its length,
+// the max length and other parameters length
+func allocateRoomToParameters(maxSize int, parameters ...string) map[string]int {
 	parameterSizeMap := make(map[string]int)
-	parameterBaseSize := maxSize / len(parameters)
-	rest := maxSize % len(parameters)
+	baseSlotSize := maxSize / len(parameters)
+	remainder := maxSize % len(parameters)
 
-	// Add to the rest when the parameter is shorter than the parameter max size.
+	// Add to the remainder when the parameter is shorter than the parameter max size.
 	for _, parameter := range parameters {
-		if parameterBaseSize > len(parameter) {
-			rest += parameterBaseSize - len(parameter)
+		if baseSlotSize > len(parameter) {
+			remainder += baseSlotSize - len(parameter)
 		}
 	}
 
-	// Dispatch the rest over the parameters in slice order
+	// Distribute the remainder over the parameters in slice order (first ones get a bigger share)
 	for _, parameter := range parameters {
-		size := parameterBaseSize + rest
-
-		if size > len(parameter) {
-			// remove the rest that is used for this parameter
-			if parameterBaseSize <= len(parameter) {
-				rest = size - len(parameter)
+		// set the slot size for this parameter to its length, then shrink it if necessary while
+		// giving it as much room as possible
+		slotSize := len(parameter)
+		if slotSize > baseSlotSize {
+			overhead := slotSize - baseSlotSize
+			if remainder > overhead {
+				// Here we can fit the whole parameter thanks to the room spared
+				slotSize = len(parameter)
+				remainder = remainder - overhead
+			} else {
+				// Here we expand the slot for this parameter as much as we can with the
+				// remainding room
+				slotSize = baseSlotSize + remainder
+				remainder = 0
 			}
-			size = len(parameter)
-		} else {
-			rest = 0
 		}
-		parameterSizeMap[parameter] = size
+		parameterSizeMap[parameter] = slotSize
 	}
 	return parameterSizeMap
 }
