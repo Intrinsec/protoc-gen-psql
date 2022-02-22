@@ -1,5 +1,5 @@
 CREATE TABLE IF NOT EXISTS {{ .Name }} ();
-{{ StringsJoin .Prefixes "\n"}}
+{{ JoinedStrings .Prefixes "\n"}}
 {{ range $Column := .Columns }}
 ALTER TABLE {{ $.Name }} ADD COLUMN IF NOT EXISTS {{ $Column }};
 {{ end }}
@@ -11,4 +11,4 @@ BEGIN
 END
 $$;
 {{ end }}
-{{ StringsJoin .Suffixes "\n"}}
+{{ JoinedStrings .Suffixes "\n"}}

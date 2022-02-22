@@ -333,7 +333,7 @@ func (v *PSQLVisitor) VisitField(f pgs.Field) (pgs.Visitor, error) {
 }
 
 func generateFromTemplate(templateText string, templateName string, data interface{}, writer io.Writer) {
-	tmpl, err := template.New(templateName).Funcs(template.FuncMap{"StringsJoin": strings.Join}).Parse(templateText)
+	tmpl, err := template.New(templateName).Funcs(template.FuncMap{"JoinedStrings": strings.Join}).Parse(templateText)
 	if err != nil {
 		panic(err)
 	}
