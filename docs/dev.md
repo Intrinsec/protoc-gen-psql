@@ -2,9 +2,9 @@
 
 ## Context
 
-In our application, each time an object is updated, we want its `update_time` field to be updated to `now()` (`auto_fill` option). Moreover, for some complex objects, we want to update its `update_time` when other related objects are updated or even when relation between objects are updated.
+In our application, each time an object is updated, we want its `update_time` field to be updated to `now()` (`auto_fill` option). Moreover, for some complex objects, we want to update their `update_time` when other related objects are updated or even when relation between objects are updated.
 
-An example is available on [tests/action.proto](tests/action.proto), here, an incident is linked to multiple actions and we want to update the incident `update_time` field when one of its action is updated (option `relay_cascade_update`). And also, when the relation between these two objects is updated. Ex.: an action is moved from an incident to another, we also want that both incident `update_time` fields to be updated (`cascade_update_on_related_table`).
+An example is available on [tests/action.proto](tests/action.proto), here, an incident is linked to multiple actions and we want to update the incident `update_time` field when one of its action is updated (option `relay_cascade_update`). And also, when the relation between these two objects is updated. Ex.: an action is moved from one incident to another, we also want that both incidents `update_time` fields to be updated (`cascade_update_on_related_table`).
 
 ## Decision
 
@@ -14,7 +14,7 @@ The 3 main solutions identified to solve this problem are:
 - Recompute the value at each read access from the `update_time` fields of the various linked objects (works only with soft delete objects)
 - Create PostgreSQL triggers to update the `update_time` field of the main object.
 
-For our needs, we want to keep as much logic as posible in the database which excludes implementing it at the application level. Moreover, we want read access to our application to be as fast as possible and some of our database objects can be deleted, which excludes to compute this value at each read access.
+For our needs, we want to keep as much logic as possible in the database which excludes implementing it at the application level. Moreover, we want read access to our application to be as fast as possible and some of our database objects can be deleted, which excludes to compute this value at each read access.
 
 In our case, the best solution is to create triggers. However, we don't want to have to maintain dozens of almost identical triggers. This is why we want to abstract this by generating triggers from protobuf options.
 
@@ -24,7 +24,7 @@ The triggers below address our need to update the `update_time` field of Inciden
 
 - to update the incident `update_time` field when the incident is updated:
 
-```sql
+```pgsql
 CREATE OR REPLACE FUNCTION fn_incident_auto_update_update_time()
   RETURNS TRIGGER
   LANGUAGE plpgsql
@@ -44,7 +44,7 @@ CREATE TRIGGER tg_incident_auto_update_update_time
 
 - to update the incident `update_time` field when an action is updated:
 
-```sql
+```pgsql
 CREATE OR REPLACE FUNCTION fn_action_incident_update_time()
   RETURNS trigger
   LANGUAGE plpgsql
@@ -53,7 +53,7 @@ BEGIN
   IF TG_OP IN ('DELETE', 'UPDATE') THEN
     UPDATE Incident SET update_time = now() WHERE uuid = (SELECT incident_uuid FROM EntityAction WHERE action_uuid = OLD.uuid);
   END IF;
-  
+
   IF TG_OP IN ('INSERT', 'UPDATE') THEN
     UPDATE Incident SET update_time = now() WHERE uuid = (SELECT incident_uuid FROM EntityAction WHERE action_uuid = NEW.uuid);
   END IF;
@@ -66,7 +66,7 @@ CREATE TRIGGER tg_action_incident_update_time AFTER UPDATE ON Action FOR EACH RO
 
 - And, another trigger on the relation table when a link between an action and an incident is created, deleted or updated:
 
-```sql
+```pgsql
 CREATE OR REPLACE FUNCTION fn_entityaction_incident_update_time()
   RETURNS trigger
   LANGUAGE plpgsql
@@ -75,7 +75,7 @@ BEGIN
   IF TG_OP IN ('DELETE', 'UPDATE') THEN
     UPDATE Incident SET update_time = now() WHERE uuid = OLD.incident_uuid;
   END IF;
-  
+
   IF TG_OP IN ('INSERT', 'UPDATE') THEN
     UPDATE Incident SET update_time = now() WHERE uuid = NEW.incident_uuid;
   END IF;
@@ -88,33 +88,33 @@ CREATE TRIGGER tg_entityaction_incident_update_time AFTER UPDATE ON EntityAction
 
 In order to generate these triggers from a protobuf option, some information about the foreign keys are required (primary keys and parent tables). Below, an example of `relay_cascade_update` option with all the information needed to create a trigger on Action table to update the `update_time` field of the related tables (incident and communication):
 
-```proto
-option (psql.relay_cascade_update) = {
-    source_foreign_key : "action_uuid"
-    src_table_name: "Action"
-    src_pk_column_name: "uuid"
-    destinations: [       
-        {
-            foreign_key: "incident_uuid"
-            dst_table_name: "Incident"
-            dst_pk_column_name: "uuid"
-            field: "update_time"
-            value: "now()"
-        },
-        {
-            foreign_key: "communication_uuid"
-            dst_table_name: "Incident"
-            dst_pk_column_name: "uuid"
-            field: "update_time"
-            value: "10"
-        }
-    ]
-};
+```protobuf
+  option (psql.relay_cascade_update) = {
+      source_foreign_key : "action_uuid"
+      src_table_name: "Action"
+      src_pk_column_name: "uuid"
+      destinations: [
+          {
+              foreign_key: "incident_uuid"
+              dst_table_name: "Incident"
+              dst_pk_column_name: "uuid"
+              field: "update_time"
+              value: "now()"
+          },
+          {
+              foreign_key: "communication_uuid"
+              dst_table_name: "Incident"
+              dst_pk_column_name: "uuid"
+              field: "update_time"
+              value: "10"
+          }
+      ]
+  };
 ```
 
-However, The parent table and their primary key related to a foreign key are already defined in `psql.column` option, and it will be less error prone that protoc-gen-psql retrieves this information from here instead of duplicate it in cascade update options:
+However, The parent table and their primary key related to a foreign key are already defined in `psql.column` option, and it will be less error prone that `protoc-gen-psql` retrieves this information from here instead of duplicate it in cascade update options:
 
-```proto
+```protobuf
 string action_uuid = 1 [
         (psql.column) = "uuid UNIQUE REFERENCES Action(id) ON DELETE CASCADE"
     ];
@@ -124,7 +124,7 @@ To retrieve this information from `psql.column` option, it is necessary to parse
 
 It is also possible to retrieve this information from the information_schema table. This query retrieves the parent table name and their primary key from `action_uuid` foreign key:
 
-```sql
+```pgsql
 SELECT
   kcu2.table_name,
   kcu2.column_name INTO dst_table_name,
@@ -143,10 +143,10 @@ Performance is an important requirement for our application, so, we do not want 
 
 We end up with a more concise option without duplicate information:
 
-```proto
+```protobuf
 option (psql.relay_cascade_update) = {
     source_foreign_key : "action_uuid"
-    destinations: [       
+    destinations: [
         {
             foreign_key: "incident_uuid"
             field: "update_time"
@@ -165,15 +165,15 @@ In conclusion, our solution enables us to have concise cascade update options wi
 
 ### Other
 
-### After triggers
+### AFTER triggers
 
-`WHEN (OLD IS DISTINCT FROM NEW)` on triggers prevents to trigger a cascade update or an auto_fill when updated object has not change. However, a before trigger will not be able to do this check on tables with generated columns (these columns are not yet generated on the NEW object on before trigger). On the contrary, after triggers do not seem to limit this PostgreSQL features.
+`WHEN (OLD IS DISTINCT FROM NEW)` on triggers prevents to trigger a cascade update or an auto_fill when updated object did not change. However, a `BEFORE` trigger will not be able to do this check on tables with generated columns (these columns are not yet generated on the `NEW` object on `BEFORE` trigger). On the contrary, `AFTER` triggers do not seem to limit this PostgreSQL features.
 
 ### Deferrable triggers on delete
 
-An after trigger called during a cascade delete raise a constraint violation errors. Ex. Delete an incident will delete the linked actions (cascade delete). However, when an action is deleted, it will trigger a cacade update to update the `update_time` of the linked incident (`relay_cascade_update` option) which is already deleted.
+An `AFTER` trigger called during a cascade delete raises a constraint violation errors. Ex. Delete an incident will delete the linked actions (cascade delete). However, when an action is deleted, it will trigger a cascade update to update the `update_time` of the linked incident (`relay_cascade_update` option) which is already deleted.
 
-A deferable trigger which will be executed at the end of the tranaction seems to not have this limitation or at least it fails silently.
+A deferrable trigger which will be executed at the end of the transaction seems to not have this limitation or at least it fails silently.
 
 It is maybe linked to this explanation from [Before Delete triggers on PostgreSQL documentation](https://www.postgresql.org/docs/9.1/sql-createtrigger.html):
 
