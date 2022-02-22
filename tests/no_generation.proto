@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package asset;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "intrinsec.com/test/test/pkg/model;model";
+
+
+// No .psql file must be generated for this proto
+
+message NoPSQLGeneration {
+
+    string uuid = 1 ;
+
+    bool enabled = 2;
+
+    google.protobuf.Timestamp update_time = 6 ;
+}

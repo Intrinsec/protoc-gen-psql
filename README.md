@@ -61,3 +61,5 @@ Two modes are available and may be chosen by adding `alter` as a parameter in pr
 Do a `make test-generate` to view a code generated example.
 
 To test the generate psql code, do a `make test`.
+
+The directory `tests` contains several proto coverage multiple use cases.
