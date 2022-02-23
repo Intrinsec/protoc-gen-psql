@@ -488,7 +488,6 @@ func allocateRoomToParameters(maxSize int, parameters ...string) map[string]int 
 			overhead := slotSize - baseSlotSize
 			if remainder > overhead {
 				// Here we can fit the whole parameter thanks to the room spared
-				slotSize = len(parameter)
 				remainder = remainder - overhead
 			} else {
 				// Here we expand the slot for this parameter as much as we can with the
