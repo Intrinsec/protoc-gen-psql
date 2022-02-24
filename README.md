@@ -30,7 +30,7 @@ Other remaining options defines what statements will be contained in the table d
 - `suffix`: these strings will be set at the end of the creation table definition.
 - `constraint`: this option enable defining constraints on the table. This option will handle error if the constraint already exist in the schema.
 - `disabled`: this boolean indicates the message should be ignored. If other options are used in this message, they will be ignored.
-- `relay_cascade_update`: create a trigger after insert, delete and update on the `source_foreign_key` parent table to update the given field on destination foreign key parent tables:
+- `relay_cascade_update`: create a trigger after `INSERT`, `DELETE` and `UPDATE` operations on the `source_foreign_key` parent table to update the given field on destination foreign key parent tables:
   - `source_foreign_key`: source foreign key
   - `destinations`: List of destinations to update:
     - `foreign_key`: destination foreign key
@@ -40,9 +40,9 @@ Other remaining options defines what statements will be contained in the table d
 ### At field level
 
 - `column`: let describe how the field should be represented in the schema.
-- `auto_fill_on_update`: create a trigger to update this field with the given value each time the table is updated. The given value can be a function (ex: now()).
-- `cascade_update_on_related_table`: create a trigger to update other fields from another table each time the table is updated. This option must be set on the foreign key of the table to update and can be set multiple time to update various fields. This option has 2 parameters to set:
-  - `field`: field to update on the parent table
+- `auto_fill_on_update`: create a trigger to update this field with the given value each time the row is updated. The given value can be a function (ex: now()).
+- `cascade_update_on_related_table`: create a trigger to update other fields in another table each time the row is updated. This option must be set on the foreign key of the table to update and can be set multiple times to update various fields. This option has 2 parameters to set:
+  - `field`: field to update in the parent table (the one referenced by the foreign key)
   - `value`: value to set. The given value can be a function (ex: now()).
 
 ## PSQL files naming convention
