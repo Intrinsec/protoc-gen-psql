@@ -162,7 +162,7 @@ func (v *PSQLVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
 	if err != nil {
 		v.Logf("Error can't retrieve initialization extensions for file %s with error: %s", f.Name().String(), err)
 	} else if ok {
-		_, err = v.initW.Write([]byte(strings.Join(initializations, "\n")))
+		_, err = v.initW.Write([]byte(strings.Join(initializations, "\n") + "\n"))
 
 		if err != nil {
 			v.Logf("Error can't write initialization for file %s with error: %s", f.Name().String(), err)
@@ -173,7 +173,7 @@ func (v *PSQLVisitor) VisitFile(f pgs.File) (pgs.Visitor, error) {
 	if err != nil {
 		v.Logf("Error can't retrieve finalization extensions for file %s with error: %s", f.Name().String(), err)
 	} else if ok {
-		_, err = v.initW.Write([]byte(strings.Join(initializations, "\n")))
+		_, err = v.finalW.Write([]byte(strings.Join(finalizations, "\n") + "\n"))
 
 		if err != nil {
 			v.Logf("Error can't write finalization for file %s with error: %s", f.Name().String(), err)
