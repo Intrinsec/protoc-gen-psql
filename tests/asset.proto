@@ -12,6 +12,11 @@ option (psql.initialization) = "CREATE EXTENSION IF NOT EXISTS pgcrypto;";
 option (psql.initialization) = "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;";
 option (psql.initialization) = "CREATE EXTENSION IF NOT EXISTS dblink;";
 
+option (psql.finalization) = "CREATE OR REPLACE FUNCTION fn_asset_insert_date() RETURNS trigger AS $$ BEGIN NEW.create_time := now(); RETURN NEW; END; $$ LANGUAGE plpgsql;";
+option (psql.finalization) = "DROP TRIGGER IF EXISTS tg_asset_insert_date ON Asset;";
+option (psql.finalization) = "CREATE TRIGGER tg_asset_insert_date BEFORE INSERT ON Asset FOR EACH ROW EXECUTE FUNCTION fn_asset_insert_date();";
+
+
 // Create DB if it do not exists
 option (psql.initialization) = "CREATE DATABASE testdb;";
 
