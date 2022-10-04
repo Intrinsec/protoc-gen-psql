@@ -70,7 +70,7 @@ BEGIN
 				SET
 					{{ .FieldToUpdate }} = {{ .Value }}
 				WHERE
-					%3$I = (SELECT {{ .DestinationForeignKey}} FROM {{ .RelationTable }} WHERE {{ .SourceForeignKey }} = OLD.%1$I);
+					%3$I = ANY(ARRAY(SELECT {{ .DestinationForeignKey}} FROM {{ .RelationTable }} WHERE {{ .SourceForeignKey }} = OLD.%1$I)::uuid[]);
 			END IF;
 			
 			IF TG_OP IN ('INSERT', 'UPDATE') THEN
@@ -79,7 +79,7 @@ BEGIN
 				SET
 					{{ .FieldToUpdate }} = {{ .Value }}
 				WHERE
-					%3$I = (SELECT {{ .DestinationForeignKey}} FROM {{ .RelationTable }} WHERE {{ .SourceForeignKey }} = NEW.%1$I);
+					%3$I = ANY(ARRAY(SELECT {{ .DestinationForeignKey}} FROM {{ .RelationTable }} WHERE {{ .SourceForeignKey }} = NEW.%1$I)::uuid[]);
 			END IF;
 
 			RETURN NULL;
