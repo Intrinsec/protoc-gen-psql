@@ -400,7 +400,7 @@ func generateCascadeIdentifierNames(name string, parameters ...string) (fnIdName
 
 	identifierNames := map[string]string{
 		"fnName":       "fn_",
-		"tgName":       "tg_",
+		"tgName":       "zz_tg_",
 		"tgDelName":    "tg_del_",
 		"fnCreateName": "fn_create_",
 	}
