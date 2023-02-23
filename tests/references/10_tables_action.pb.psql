@@ -1,0 +1,16 @@
+-- File: tests/action.proto
+CREATE TABLE IF NOT EXISTS Action (
+	id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+	enabled boolean NOT NULL DEFAULT TRUE,
+	update_time timestamp with time zone NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS Incident (
+	uuid uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+	enabled boolean NOT NULL DEFAULT TRUE,
+	update_time timestamp with time zone NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS Communication (
+	uuid uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+	enabled boolean NOT NULL DEFAULT TRUE,
+	update_time timestamp with time zone NOT NULL DEFAULT now()
+);

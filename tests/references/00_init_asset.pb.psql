@@ -1,0 +1,6 @@
+-- File: tests/asset.proto
+-- pgcrypto used for uuid
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+CREATE EXTENSION IF NOT EXISTS dblink;
+CREATE DATABASE testdb;

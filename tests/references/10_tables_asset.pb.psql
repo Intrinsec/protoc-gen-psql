@@ -1,0 +1,6 @@
+-- File: tests/asset.proto
+CREATE TABLE IF NOT EXISTS Asset (
+	uuid uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+	enabled boolean NOT NULL DEFAULT TRUE,
+	update_time timestamp with time zone NOT NULL DEFAULT now()
+);

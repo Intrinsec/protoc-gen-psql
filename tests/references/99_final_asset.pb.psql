@@ -1,0 +1,126 @@
+-- File: tests/asset.proto
+CREATE OR REPLACE FUNCTION fn_asset_insert_date() RETURNS trigger AS $$ BEGIN NEW.create_time := now(); RETURN NEW; END; $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS tg_asset_insert_date ON Asset;
+CREATE TRIGGER tg_asset_insert_date BEFORE INSERT ON Asset FOR EACH ROW EXECUTE FUNCTION fn_asset_insert_date();
+CREATE OR REPLACE FUNCTION fn_create_auto_fill_asset_update_time_3b7706bf()
+    RETURNS VOID
+    LANGUAGE plpgsql
+AS $fn_create_trigger$
+DECLARE
+    primary_key text;
+BEGIN
+    SELECT
+        kcu.column_name
+    INTO
+        primary_key
+    FROM
+        information_schema.key_column_usage AS kcu
+    WHERE
+        kcu.table_name = lower('Asset')
+        AND kcu.constraint_name LIKE '%_pkey';
+
+    EXECUTE FORMAT($format_function$
+        CREATE OR REPLACE FUNCTION fn_auto_fill_asset_update_time_3b7706bf()
+            RETURNS TRIGGER
+            LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            UPDATE
+                Asset
+            SET
+                update_time = now()
+            WHERE
+                %1$I = NEW.%1$I;
+            RETURN NEW;
+        END
+        $$;
+    $format_function$,
+    primary_key);
+
+    DROP TRIGGER IF EXISTS zz_tg_auto_fill_asset_update_time_3b7706bf ON Asset;
+
+    CREATE TRIGGER zz_tg_auto_fill_asset_update_time_3b7706bf
+        AFTER UPDATE ON Asset
+        FOR EACH ROW
+        WHEN (OLD IS DISTINCT FROM NEW)
+        EXECUTE FUNCTION fn_auto_fill_asset_update_time_3b7706bf();
+END
+$fn_create_trigger$;
+
+SELECT fn_create_auto_fill_asset_update_time_3b7706bf();
+CREATE OR REPLACE FUNCTION fn_create_cascade_related_groupsassetasset_child_id_813509de()
+	RETURNS VOID
+	LANGUAGE plpgsql
+AS $fn_create_trigger$
+DECLARE
+	dst_table_name TEXT;
+	dst_pk_column_name TEXT;
+	t timestamptz := clock_timestamp();
+BEGIN
+	SELECT
+		kcu2.table_name,
+		kcu2.column_name
+	INTO
+		dst_table_name,
+		dst_pk_column_name
+	FROM
+		information_schema.key_column_usage AS kcu
+		INNER JOIN information_schema.referential_constraints AS rc ON rc.constraint_name = kcu.constraint_name
+		INNER JOIN information_schema.key_column_usage AS kcu2 ON kcu2.constraint_name = rc.unique_constraint_name
+	WHERE
+		kcu.table_name = lower('GroupsAssetAsset')
+		AND kcu.constraint_name LIKE '%_fkey'
+		AND kcu.column_name = 'child_id';
+	
+	EXECUTE FORMAT($format_function$
+		CREATE OR REPLACE FUNCTION fn_cascade_related_groupsassetasset_child_id_813509de()
+			RETURNS trigger
+			LANGUAGE plpgsql
+			SECURITY DEFINER
+		AS $$
+		BEGIN
+			IF TG_OP = 'UPDATE' AND NEW IS NOT DISTINCT FROM OLD THEN
+				RETURN NULL;
+			END IF;
+
+			IF TG_OP IN ('DELETE', 'UPDATE') THEN
+				UPDATE
+					%1$I
+				SET
+					update_time = now()
+				WHERE
+					%2$I = OLD.child_id;
+			END IF;
+			
+			IF TG_OP IN ('INSERT', 'UPDATE') THEN
+				UPDATE
+					%1$I
+				SET
+					update_time = now()
+				WHERE
+					%2$I = NEW.child_id;
+			END IF;
+
+			RETURN NULL;
+		END
+		$$;
+	$format_function$, dst_table_name, dst_pk_column_name);
+
+	DROP TRIGGER IF EXISTS zz_tg_cascade_related_groupsassetasset_child_id_813509de ON GroupsAssetAsset;
+
+	DROP TRIGGER IF EXISTS tg_del_cascade_related_groupsassetasset_child_id_813509de ON GroupsAssetAsset;
+
+	CREATE TRIGGER zz_tg_cascade_related_groupsassetasset_child_id_813509de
+		AFTER INSERT OR UPDATE ON GroupsAssetAsset
+		FOR EACH ROW
+		EXECUTE FUNCTION fn_cascade_related_groupsassetasset_child_id_813509de();
+	
+	CREATE CONSTRAINT TRIGGER tg_del_cascade_related_groupsassetasset_child_id_813509de
+		AFTER DELETE ON GroupsAssetAsset
+		DEFERRABLE INITIALLY DEFERRED
+		FOR EACH ROW
+		EXECUTE FUNCTION fn_cascade_related_groupsassetasset_child_id_813509de();
+END
+$fn_create_trigger$;
+
+SELECT fn_create_cascade_related_groupsassetasset_child_id_813509de();

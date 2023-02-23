@@ -1,0 +1,8 @@
+-- File: tests/action.proto
+CREATE TABLE IF NOT EXISTS EntityAction (
+	action_uuid uuid UNIQUE REFERENCES Action(id) ON DELETE CASCADE,
+	incident_uuid uuid REFERENCES Incident(uuid) ON DELETE CASCADE,
+	communication_uuid uuid REFERENCES Communication(uuid) ON DELETE CASCADE,
+	UNIQUE (incident_uuid, action_uuid, communication_uuid),
+	CONSTRAINT ck_uniq_reference CHECK (num_nonnulls(incident_uuid,communication_uuid) = 1)
+);

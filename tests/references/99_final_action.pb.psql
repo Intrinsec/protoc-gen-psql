@@ -1,0 +1,505 @@
+-- File: tests/action.proto
+CREATE OR REPLACE FUNCTION fn_create_auto_fill_action_update_time_4204071d()
+    RETURNS VOID
+    LANGUAGE plpgsql
+AS $fn_create_trigger$
+DECLARE
+    primary_key text;
+BEGIN
+    SELECT
+        kcu.column_name
+    INTO
+        primary_key
+    FROM
+        information_schema.key_column_usage AS kcu
+    WHERE
+        kcu.table_name = lower('Action')
+        AND kcu.constraint_name LIKE '%_pkey';
+
+    EXECUTE FORMAT($format_function$
+        CREATE OR REPLACE FUNCTION fn_auto_fill_action_update_time_4204071d()
+            RETURNS TRIGGER
+            LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            UPDATE
+                Action
+            SET
+                update_time = now()
+            WHERE
+                %1$I = NEW.%1$I;
+            RETURN NEW;
+        END
+        $$;
+    $format_function$,
+    primary_key);
+
+    DROP TRIGGER IF EXISTS zz_tg_auto_fill_action_update_time_4204071d ON Action;
+
+    CREATE TRIGGER zz_tg_auto_fill_action_update_time_4204071d
+        AFTER UPDATE ON Action
+        FOR EACH ROW
+        WHEN (OLD IS DISTINCT FROM NEW)
+        EXECUTE FUNCTION fn_auto_fill_action_update_time_4204071d();
+END
+$fn_create_trigger$;
+
+SELECT fn_create_auto_fill_action_update_time_4204071d();
+CREATE OR REPLACE FUNCTION fn_create_auto_fill_incident_update_time_51b207ed()
+    RETURNS VOID
+    LANGUAGE plpgsql
+AS $fn_create_trigger$
+DECLARE
+    primary_key text;
+BEGIN
+    SELECT
+        kcu.column_name
+    INTO
+        primary_key
+    FROM
+        information_schema.key_column_usage AS kcu
+    WHERE
+        kcu.table_name = lower('Incident')
+        AND kcu.constraint_name LIKE '%_pkey';
+
+    EXECUTE FORMAT($format_function$
+        CREATE OR REPLACE FUNCTION fn_auto_fill_incident_update_time_51b207ed()
+            RETURNS TRIGGER
+            LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            UPDATE
+                Incident
+            SET
+                update_time = now()
+            WHERE
+                %1$I = NEW.%1$I;
+            RETURN NEW;
+        END
+        $$;
+    $format_function$,
+    primary_key);
+
+    DROP TRIGGER IF EXISTS zz_tg_auto_fill_incident_update_time_51b207ed ON Incident;
+
+    CREATE TRIGGER zz_tg_auto_fill_incident_update_time_51b207ed
+        AFTER UPDATE ON Incident
+        FOR EACH ROW
+        WHEN (OLD IS DISTINCT FROM NEW)
+        EXECUTE FUNCTION fn_auto_fill_incident_update_time_51b207ed();
+END
+$fn_create_trigger$;
+
+SELECT fn_create_auto_fill_incident_update_time_51b207ed();
+CREATE OR REPLACE FUNCTION fn_create_auto_fill_communication_update_time_82650a15()
+    RETURNS VOID
+    LANGUAGE plpgsql
+AS $fn_create_trigger$
+DECLARE
+    primary_key text;
+BEGIN
+    SELECT
+        kcu.column_name
+    INTO
+        primary_key
+    FROM
+        information_schema.key_column_usage AS kcu
+    WHERE
+        kcu.table_name = lower('Communication')
+        AND kcu.constraint_name LIKE '%_pkey';
+
+    EXECUTE FORMAT($format_function$
+        CREATE OR REPLACE FUNCTION fn_auto_fill_communication_update_time_82650a15()
+            RETURNS TRIGGER
+            LANGUAGE plpgsql
+        AS $$
+        BEGIN
+            UPDATE
+                Communication
+            SET
+                update_time = now()
+            WHERE
+                %1$I = NEW.%1$I;
+            RETURN NEW;
+        END
+        $$;
+    $format_function$,
+    primary_key);
+
+    DROP TRIGGER IF EXISTS zz_tg_auto_fill_communication_update_time_82650a15 ON Communication;
+
+    CREATE TRIGGER zz_tg_auto_fill_communication_update_time_82650a15
+        AFTER UPDATE ON Communication
+        FOR EACH ROW
+        WHEN (OLD IS DISTINCT FROM NEW)
+        EXECUTE FUNCTION fn_auto_fill_communication_update_time_82650a15();
+END
+$fn_create_trigger$;
+
+SELECT fn_create_auto_fill_communication_update_time_82650a15();
+CREATE OR REPLACE FUNCTION fn_create_relay_cascade_entityacti_action_uu_incident__25450f2e()
+	RETURNS VOID
+	LANGUAGE plpgsql
+AS $fn_create_trigger$
+DECLARE
+	src_table_name TEXT;
+	src_pk_column_name TEXT;
+	dst_table_name TEXT;
+	dst_pk_column_name TEXT;
+	t timestamptz := clock_timestamp();
+BEGIN
+	WITH kcu_all AS (
+		SELECT
+			kcu.column_name AS fk_column_name,
+			kcu2.column_name AS column_name,
+			kcu2.table_name AS table_name
+		FROM
+			information_schema.key_column_usage AS kcu
+			INNER JOIN information_schema.referential_constraints AS rc ON rc.constraint_name = kcu.constraint_name
+			INNER JOIN information_schema.key_column_usage AS kcu2 ON kcu2.constraint_name = rc.unique_constraint_name
+		WHERE
+			kcu.table_name = lower('EntityAction')
+			AND kcu.constraint_name LIKE '%_fkey'
+			AND (kcu.column_name = 'action_uuid' OR kcu.column_name = 'incident_uuid')
+	),
+	src AS (
+		SELECT
+			column_name AS src_column_name,
+			table_name AS src_table_name
+		FROM
+			kcu_all
+		WHERE
+			fk_column_name = 'action_uuid'
+	),
+	dst AS (
+		SELECT
+			column_name AS dst_column_name,
+			table_name AS dst_table_name
+		FROM kcu_all
+		WHERE
+			fk_column_name = 'incident_uuid'
+	)
+	SELECT
+		src.src_table_name,
+		src.src_column_name,
+		dst.dst_table_name,
+		dst.dst_column_name
+	INTO
+		src_table_name,
+		src_pk_column_name,
+		dst_table_name,
+		dst_pk_column_name
+	FROM src
+	CROSS JOIN dst;
+
+	EXECUTE FORMAT($format_function$
+		CREATE OR REPLACE FUNCTION fn_relay_cascade_entityacti_action_uu_incident__25450f2e()
+			RETURNS trigger
+			LANGUAGE plpgsql
+			SECURITY DEFINER
+		AS $$
+		BEGIN
+			IF TG_OP = 'UPDATE' AND NEW IS NOT DISTINCT FROM OLD THEN
+				RETURN NULL;
+			END IF;
+
+			IF TG_OP IN ('DELETE', 'UPDATE') THEN
+				UPDATE
+					%2$I
+				SET
+					update_time = now()
+				WHERE
+					%3$I = ANY(ARRAY(SELECT incident_uuid FROM EntityAction WHERE action_uuid = OLD.%1$I)::uuid[]);
+			END IF;
+
+			IF TG_OP IN ('INSERT', 'UPDATE') THEN
+				UPDATE
+					%2$I
+				SET
+					update_time = now()
+				WHERE
+					%3$I = ANY(ARRAY(SELECT incident_uuid FROM EntityAction WHERE action_uuid = NEW.%1$I)::uuid[]);
+			END IF;
+
+			RETURN NULL;
+		END
+		$$;
+	$format_function$, src_pk_column_name, dst_table_name, dst_pk_column_name);
+
+	EXECUTE FORMAT('DROP TRIGGER IF EXISTS zz_tg_relay_cascade_entityacti_action_uu_incident__25450f2e ON %I;', src_table_name);
+
+	EXECUTE FORMAT('DROP TRIGGER IF EXISTS tg_del_relay_cascade_entityacti_action_uu_incident__25450f2e ON %I;', src_table_name);
+
+	EXECUTE FORMAT('CREATE TRIGGER zz_tg_relay_cascade_entityacti_action_uu_incident__25450f2e AFTER INSERT OR UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION fn_relay_cascade_entityacti_action_uu_incident__25450f2e();', src_table_name);
+
+	EXECUTE FORMAT('CREATE CONSTRAINT TRIGGER tg_del_relay_cascade_entityacti_action_uu_incident__25450f2e AFTER DELETE ON %I DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION fn_relay_cascade_entityacti_action_uu_incident__25450f2e();', src_table_name);
+END
+$fn_create_trigger$;
+
+SELECT fn_create_relay_cascade_entityacti_action_uu_incident__25450f2e();
+CREATE OR REPLACE FUNCTION fn_create_relay_cascade_entityacti_action_uu_communica_786d1156()
+	RETURNS VOID
+	LANGUAGE plpgsql
+AS $fn_create_trigger$
+DECLARE
+	src_table_name TEXT;
+	src_pk_column_name TEXT;
+	dst_table_name TEXT;
+	dst_pk_column_name TEXT;
+	t timestamptz := clock_timestamp();
+BEGIN
+	WITH kcu_all AS (
+		SELECT
+			kcu.column_name AS fk_column_name,
+			kcu2.column_name AS column_name,
+			kcu2.table_name AS table_name
+		FROM
+			information_schema.key_column_usage AS kcu
+			INNER JOIN information_schema.referential_constraints AS rc ON rc.constraint_name = kcu.constraint_name
+			INNER JOIN information_schema.key_column_usage AS kcu2 ON kcu2.constraint_name = rc.unique_constraint_name
+		WHERE
+			kcu.table_name = lower('EntityAction')
+			AND kcu.constraint_name LIKE '%_fkey'
+			AND (kcu.column_name = 'action_uuid' OR kcu.column_name = 'communication_uuid')
+	),
+	src AS (
+		SELECT
+			column_name AS src_column_name,
+			table_name AS src_table_name
+		FROM
+			kcu_all
+		WHERE
+			fk_column_name = 'action_uuid'
+	),
+	dst AS (
+		SELECT
+			column_name AS dst_column_name,
+			table_name AS dst_table_name
+		FROM kcu_all
+		WHERE
+			fk_column_name = 'communication_uuid'
+	)
+	SELECT
+		src.src_table_name,
+		src.src_column_name,
+		dst.dst_table_name,
+		dst.dst_column_name
+	INTO
+		src_table_name,
+		src_pk_column_name,
+		dst_table_name,
+		dst_pk_column_name
+	FROM src
+	CROSS JOIN dst;
+
+	EXECUTE FORMAT($format_function$
+		CREATE OR REPLACE FUNCTION fn_relay_cascade_entityacti_action_uu_communica_786d1156()
+			RETURNS trigger
+			LANGUAGE plpgsql
+			SECURITY DEFINER
+		AS $$
+		BEGIN
+			IF TG_OP = 'UPDATE' AND NEW IS NOT DISTINCT FROM OLD THEN
+				RETURN NULL;
+			END IF;
+
+			IF TG_OP IN ('DELETE', 'UPDATE') THEN
+				UPDATE
+					%2$I
+				SET
+					update_time = 10
+				WHERE
+					%3$I = ANY(ARRAY(SELECT communication_uuid FROM EntityAction WHERE action_uuid = OLD.%1$I)::uuid[]);
+			END IF;
+
+			IF TG_OP IN ('INSERT', 'UPDATE') THEN
+				UPDATE
+					%2$I
+				SET
+					update_time = 10
+				WHERE
+					%3$I = ANY(ARRAY(SELECT communication_uuid FROM EntityAction WHERE action_uuid = NEW.%1$I)::uuid[]);
+			END IF;
+
+			RETURN NULL;
+		END
+		$$;
+	$format_function$, src_pk_column_name, dst_table_name, dst_pk_column_name);
+
+	EXECUTE FORMAT('DROP TRIGGER IF EXISTS zz_tg_relay_cascade_entityacti_action_uu_communica_786d1156 ON %I;', src_table_name);
+
+	EXECUTE FORMAT('DROP TRIGGER IF EXISTS tg_del_relay_cascade_entityacti_action_uu_communica_786d1156 ON %I;', src_table_name);
+
+	EXECUTE FORMAT('CREATE TRIGGER zz_tg_relay_cascade_entityacti_action_uu_communica_786d1156 AFTER INSERT OR UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION fn_relay_cascade_entityacti_action_uu_communica_786d1156();', src_table_name);
+
+	EXECUTE FORMAT('CREATE CONSTRAINT TRIGGER tg_del_relay_cascade_entityacti_action_uu_communica_786d1156 AFTER DELETE ON %I DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION fn_relay_cascade_entityacti_action_uu_communica_786d1156();', src_table_name);
+END
+$fn_create_trigger$;
+
+SELECT fn_create_relay_cascade_entityacti_action_uu_communica_786d1156();
+CREATE OR REPLACE FUNCTION fn_create_cascade_related_entityaction_incident_uuid_8af60a6d()
+	RETURNS VOID
+	LANGUAGE plpgsql
+AS $fn_create_trigger$
+DECLARE
+	dst_table_name TEXT;
+	dst_pk_column_name TEXT;
+	t timestamptz := clock_timestamp();
+BEGIN
+	SELECT
+		kcu2.table_name,
+		kcu2.column_name
+	INTO
+		dst_table_name,
+		dst_pk_column_name
+	FROM
+		information_schema.key_column_usage AS kcu
+		INNER JOIN information_schema.referential_constraints AS rc ON rc.constraint_name = kcu.constraint_name
+		INNER JOIN information_schema.key_column_usage AS kcu2 ON kcu2.constraint_name = rc.unique_constraint_name
+	WHERE
+		kcu.table_name = lower('EntityAction')
+		AND kcu.constraint_name LIKE '%_fkey'
+		AND kcu.column_name = 'incident_uuid';
+
+	EXECUTE FORMAT($format_function$
+		CREATE OR REPLACE FUNCTION fn_cascade_related_entityaction_incident_uuid_8af60a6d()
+			RETURNS trigger
+			LANGUAGE plpgsql
+			SECURITY DEFINER
+		AS $$
+		BEGIN
+			IF TG_OP = 'UPDATE' AND NEW IS NOT DISTINCT FROM OLD THEN
+				RETURN NULL;
+			END IF;
+
+			IF TG_OP IN ('DELETE', 'UPDATE') THEN
+				UPDATE
+					%1$I
+				SET
+					update_time = now()
+				WHERE
+					%2$I = OLD.incident_uuid;
+			END IF;
+
+			IF TG_OP IN ('INSERT', 'UPDATE') THEN
+				UPDATE
+					%1$I
+				SET
+					update_time = now()
+				WHERE
+					%2$I = NEW.incident_uuid;
+			END IF;
+
+			RETURN NULL;
+		END
+		$$;
+	$format_function$, dst_table_name, dst_pk_column_name);
+
+	DROP TRIGGER IF EXISTS zz_tg_cascade_related_entityaction_incident_uuid_8af60a6d ON EntityAction;
+
+	DROP TRIGGER IF EXISTS tg_del_cascade_related_entityaction_incident_uuid_8af60a6d ON EntityAction;
+
+	CREATE TRIGGER zz_tg_cascade_related_entityaction_incident_uuid_8af60a6d
+		AFTER INSERT OR UPDATE ON EntityAction
+		FOR EACH ROW
+		EXECUTE FUNCTION fn_cascade_related_entityaction_incident_uuid_8af60a6d();
+
+	CREATE CONSTRAINT TRIGGER tg_del_cascade_related_entityaction_incident_uuid_8af60a6d
+		AFTER DELETE ON EntityAction
+		DEFERRABLE INITIALLY DEFERRED
+		FOR EACH ROW
+		EXECUTE FUNCTION fn_cascade_related_entityaction_incident_uuid_8af60a6d();
+END
+$fn_create_trigger$;
+
+SELECT fn_create_cascade_related_entityaction_incident_uuid_8af60a6d();
+CREATE OR REPLACE FUNCTION fn_create_cascade_related_entityaction_communication_u_c6590c95()
+	RETURNS VOID
+	LANGUAGE plpgsql
+AS $fn_create_trigger$
+DECLARE
+	dst_table_name TEXT;
+	dst_pk_column_name TEXT;
+	t timestamptz := clock_timestamp();
+BEGIN
+	SELECT
+		kcu2.table_name,
+		kcu2.column_name
+	INTO
+		dst_table_name,
+		dst_pk_column_name
+	FROM
+		information_schema.key_column_usage AS kcu
+		INNER JOIN information_schema.referential_constraints AS rc ON rc.constraint_name = kcu.constraint_name
+		INNER JOIN information_schema.key_column_usage AS kcu2 ON kcu2.constraint_name = rc.unique_constraint_name
+	WHERE
+		kcu.table_name = lower('EntityAction')
+		AND kcu.constraint_name LIKE '%_fkey'
+		AND kcu.column_name = 'communication_uuid';
+
+	EXECUTE FORMAT($format_function$
+		CREATE OR REPLACE FUNCTION fn_cascade_related_entityaction_communication_u_c6590c95()
+			RETURNS trigger
+			LANGUAGE plpgsql
+			SECURITY DEFINER
+		AS $$
+		BEGIN
+			IF TG_OP = 'UPDATE' AND NEW IS NOT DISTINCT FROM OLD THEN
+				RETURN NULL;
+			END IF;
+
+			IF TG_OP IN ('DELETE', 'UPDATE') THEN
+				UPDATE
+					%1$I
+				SET
+					update_time = 10
+				WHERE
+					%2$I = OLD.communication_uuid;
+
+				UPDATE
+					%1$I
+				SET
+					enabled = false
+				WHERE
+					%2$I = OLD.communication_uuid;
+			END IF;
+
+			IF TG_OP IN ('INSERT', 'UPDATE') THEN
+				UPDATE
+					%1$I
+				SET
+					update_time = 10
+				WHERE
+					%2$I = NEW.communication_uuid;
+
+				UPDATE
+					%1$I
+				SET
+					enabled = false
+				WHERE
+					%2$I = NEW.communication_uuid;
+			END IF;
+
+			RETURN NULL;
+		END
+		$$;
+	$format_function$, dst_table_name, dst_pk_column_name);
+
+	DROP TRIGGER IF EXISTS zz_tg_cascade_related_entityaction_communication_u_c6590c95 ON EntityAction;
+
+	DROP TRIGGER IF EXISTS tg_del_cascade_related_entityaction_communication_u_c6590c95 ON EntityAction;
+
+	CREATE TRIGGER zz_tg_cascade_related_entityaction_communication_u_c6590c95
+		AFTER INSERT OR UPDATE ON EntityAction
+		FOR EACH ROW
+		EXECUTE FUNCTION fn_cascade_related_entityaction_communication_u_c6590c95();
+
+	CREATE CONSTRAINT TRIGGER tg_del_cascade_related_entityaction_communication_u_c6590c95
+		AFTER DELETE ON EntityAction
+		DEFERRABLE INITIALLY DEFERRED
+		FOR EACH ROW
+		EXECUTE FUNCTION fn_cascade_related_entityaction_communication_u_c6590c95();
+END
+$fn_create_trigger$;
+
+SELECT fn_create_cascade_related_entityaction_communication_u_c6590c95();

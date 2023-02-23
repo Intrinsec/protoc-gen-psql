@@ -3,6 +3,8 @@ space := $(empty) $(empty)
 NAME := psql
 PACKAGE := github.com/intrinsec/protoc-gen-$(NAME)
 
+SHELL := /bin/bash
+
 CI_JOB_ID ?= local
 export CI_JOB_ID
 
@@ -41,6 +43,12 @@ bin/protoc-gen-$(NAME): $(NAME)/$(NAME).pb.go $(wildcard *.go)
 test-generate: build
 	@protoc -I . --plugin=protoc-gen-$(NAME)=$(shell pwd)/bin/protoc-gen-$(NAME) --$(NAME)_out="." tests/*.proto
 	@cat tests/*.pb.psql
+	# Checking diff between generated file and reference file
+	# If the following is empty then the file are identical
+	@for i in `ls tests/*.pb.psql`; do \
+		diff tests/references/$$(basename $$i) $$i; \
+	done \
+
 
 .PHONY: build-docker
 build-docker:
@@ -65,4 +73,3 @@ clean:
 .PHONY: distclean
 distclean: clean
 	@rm -fv bin/protoc-gen-go bin/protoc-gen-$(NAME) $(NAME)/$(NAME).pb.go
-

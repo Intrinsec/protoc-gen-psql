@@ -1,0 +1,7 @@
+-- File: tests/asset.proto
+CREATE TABLE IF NOT EXISTS GroupsAssetAsset (
+	parent_id uuid REFERENCES Asset(uuid) ON DELETE CASCADE,
+	child_id uuid REFERENCES Asset(uuid) ON DELETE CASCADE,
+	CONSTRAINT ck_no_self_loops CHECK (parent_id <> child_id),
+	UNIQUE (parent_id, child_id)
+);
