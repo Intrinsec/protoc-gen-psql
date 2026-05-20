@@ -67,6 +67,24 @@ Mandatory iagen-dev skill order for any non-trivial change:
 - Baseline scan + ignore list reviewed quarterly.
 - Tracked in `docs/superpowers/plans/2026-05-20-onboard-secret-scanning.md`.
 
+## SBOM
+
+- Generated on every CI build with `cyclonedx-gomod` -> `sbom.cdx.json`.
+- Uploaded as an artifact by the CI `sbom` job, retained 30 days.
+- Rationale: although this is a build-time plugin, it ends up embedded in
+  consumers' build pipelines, so the dependency closure is part of *their*
+  supply chain. SBOM lets downstream teams answer "do we ship lib X?"
+  without re-running their own scan.
+
+## License compliance
+
+- `go-licenses check ./...` runs in CI against an explicit allow-list:
+  `Apache-2.0`, `BSD-2-Clause`, `BSD-3-Clause`, `MIT`, `ISC`, `MPL-2.0`.
+- Job fails on any disallowed license -- review and either replace the
+  dep or extend the allow-list (with a written rationale in the commit
+  message).
+- License inventory exported as `licenses.csv` artifact (30-day retention).
+
 ## Documentation
 
 - `README.md` — user-facing plugin usage and options reference.
@@ -87,8 +105,6 @@ on tier change or quarterly review.
 | Database (CNPG manifest + backups) | not-applicable | Plugin emits SQL files; does not own a database. |
 | Container hardening | not-applicable | No production Dockerfile; `tests/Dockerfile.psqlclient` is test-only. |
 | Release signing (cosign / SLSA provenance) | deferred | Tier B build tool; revisit if distributed beyond internal CI. |
-| SBOM (CycloneDX/syft) | deferred | Revisit when project ships binaries outside internal CI. |
-| License compliance gate | replaced-by:manual-review | Small dep tree (5 direct), reviewed via Renovate PRs. |
 | Threat model | not-applicable | Pure code generator, no trust boundary at runtime. |
 | Architecture review (`docs/DECISIONS.md`) | replaced-by:docs/dev.md | Existing ADR covers active design areas (cascade triggers). |
 

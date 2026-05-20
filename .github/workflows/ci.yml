@@ -4,6 +4,11 @@ on:
   push:
     branches: [master]
   pull_request:
+  schedule:
+    # Weekly govulncheck against master so newly-published CVEs surface
+    # even when there are no commits. Monday 06:00 UTC.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -118,3 +123,46 @@ jobs:
           name: protoc-gen-psql
           path: bin/protoc-gen-psql
           retention-days: 7
+
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Install cyclonedx-gomod
+        env:
+          GOFLAGS: ""
+        run: go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest
+      - name: Generate CycloneDX SBOM
+        run: cyclonedx-gomod mod -licenses -json -output sbom.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.cdx.json
+          retention-days: 30
+
+  license-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Install go-licenses
+        env:
+          GOFLAGS: ""
+        run: go install github.com/google/go-licenses@latest
+      - name: Export license inventory
+        run: go-licenses report ./... --template '{{range .}}{{.Name}},{{.LicenseName}},{{.LicenseURL}}{{"\n"}}{{end}}' > licenses.csv
+      - name: Enforce allow-list
+        run: |
+          go-licenses check ./... \
+            --allowed_licenses="Apache-2.0,BSD-2-Clause,BSD-3-Clause,MIT,ISC,MPL-2.0"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: licenses
+          path: licenses.csv
+          retention-days: 30

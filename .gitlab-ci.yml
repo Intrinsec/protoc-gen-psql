@@ -17,6 +17,7 @@ stages:
   - test
   - vuln
   - build
+  - supply-chain
 
 variables:
   GO_VERSION: "1.26"
@@ -105,3 +106,27 @@ build:
     paths:
       - bin/protoc-gen-psql
     expire_in: 1 week
+
+# ---- supply-chain ----
+
+sbom:
+  stage: supply-chain
+  script:
+    - GOFLAGS= go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest
+    - cyclonedx-gomod mod -licenses -json -output sbom.cdx.json
+  artifacts:
+    paths:
+      - sbom.cdx.json
+    expire_in: 30 days
+
+license-check:
+  stage: supply-chain
+  script:
+    - GOFLAGS= go install github.com/google/go-licenses@latest
+    - go-licenses report ./... --template '{{range .}}{{.Name}},{{.LicenseName}},{{.LicenseURL}}{{"\n"}}{{end}}' > licenses.csv
+    - go-licenses check ./... --allowed_licenses="Apache-2.0,BSD-2-Clause,BSD-3-Clause,MIT,ISC,MPL-2.0"
+  artifacts:
+    when: always
+    paths:
+      - licenses.csv
+    expire_in: 30 days
