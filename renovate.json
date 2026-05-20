@@ -1,0 +1,36 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":enableVulnerabilityAlertsWithLabel(security)",
+    ":disableRateLimiting",
+    ":semanticCommits"
+  ],
+  "schedule": ["before 6am on monday"],
+  "timezone": "Europe/Paris",
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["indirect"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "branch"
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["direct"],
+      "matchUpdateTypes": ["major"],
+      "labels": ["dependencies", "needs-review"]
+    },
+    {
+      "matchManagers": ["gomod"],
+      "groupName": "go protobuf stack",
+      "matchPackagePatterns": ["protobuf", "protoc-gen"]
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "labels": ["security"],
+    "automerge": false
+  }
+}
