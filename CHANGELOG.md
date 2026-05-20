@@ -6,6 +6,41 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.0.12] - 2026-05-20
+
+Toolchain and dependency refresh. No change to generated PostgreSQL output.
+
+### Added
+
+- Multi-directory regression fixture (`tests/sub/asset.proto`) sharing the
+  base filename `asset.proto` with the existing top-level fixture. Locks in
+  source-relative output behaviour: any future regression flattening the
+  output filename to `<basename>.<ext>` would silently overwrite one of the
+  two `10_tables_asset.pb.psql` outputs and is now caught by
+  `make test-generate`.
+
+### Changed
+
+- Bumped `github.com/lyft/protoc-gen-star` from `v0.6.2` to `v2.0.4`
+  (new `/v2` module path).
+- Regenerated `psql/psql.pb.go` with `protoc-gen-go` `v1.36.11` (was
+  `v1.27.1`). Generated code now imports from
+  `google.golang.org/protobuf/types/descriptorpb` instead of the legacy
+  `github.com/golang/protobuf/protoc-gen-go/descriptor` path.
+- Pinned `golangci-lint` to `v2.12.2` in CI and pre-commit (was `v2.10.1`).
+- `Makefile` `test-generate` target now walks the full `tests/` tree via
+  `find tests -name '*.proto'` instead of `tests/*.proto`, so sub-directory
+  fixtures are picked up automatically.
+
+### Removed
+
+- Dropped the deprecated `github.com/golang/protobuf` direct dependency.
+  All protobuf reflection now goes through `google.golang.org/protobuf`.
+- Removed `gitleaks` from GitHub Actions, GitLab CI, and pre-commit hooks.
+  gitleaks v8.x ships under BSL-1.1 and the project has no commercial
+  license. Carve-out documented in `AGENTS.md` (`wont-fix`). Code review
+  plus generic pre-commit hooks remain the safeguard.
+
 ## [0.0.11] - 2026-05-20
 
 First release after iagen-dev brownfield onboarding (tier B Go CLI). No
@@ -73,5 +108,6 @@ behavioural change to the generated PostgreSQL output.
 - All Go-module CVEs reported against earlier dependency versions cleared
   by the dep refresh.
 
-[Unreleased]: https://github.com/Intrinsec/protoc-gen-psql/compare/v0.0.11...HEAD
+[Unreleased]: https://github.com/Intrinsec/protoc-gen-psql/compare/v0.0.12...HEAD
+[0.0.12]: https://github.com/Intrinsec/protoc-gen-psql/compare/v0.0.11...v0.0.12
 [0.0.11]: https://github.com/Intrinsec/protoc-gen-psql/compare/v0.0.10...v0.0.11

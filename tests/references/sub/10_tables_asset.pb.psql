@@ -1,0 +1,5 @@
+-- File: tests/sub/asset.proto
+CREATE TABLE IF NOT EXISTS Widget (
+	uuid uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+	label text NOT NULL
+);

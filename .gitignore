@@ -1,4 +1,4 @@
 bin/
 *.pb.psql
-!tests/references/*.pb.psql
-tests/*.pb.go
+!tests/references/**/*.pb.psql
+tests/**/*.pb.go

@@ -45,15 +45,18 @@ vendor:
 	@go mod vendor
 
 
+PROTO_FIXTURES := $(sort $(shell find tests -name '*.proto'))
+
 .PHONY: test-generate
 test-generate: build
-	@protoc -I . -I $(PROTOC_WKT_INCLUDE) --plugin=protoc-gen-$(NAME)=$(shell pwd)/bin/protoc-gen-$(NAME) --$(NAME)_out="." tests/*.proto
-	@cat tests/*.pb.psql
+	@protoc -I . -I $(PROTOC_WKT_INCLUDE) --plugin=protoc-gen-$(NAME)=$(shell pwd)/bin/protoc-gen-$(NAME) --$(NAME)_out="." $(PROTO_FIXTURES)
+	@find tests -name '*.pb.psql' -not -path 'tests/references/*' -exec cat {} \;
 	# Checking diff between generated file and reference file
 	# If the following is empty then the file are identical
-	@for i in `ls tests/*.pb.psql`; do \
-		diff tests/references/$$(basename $$i) $$i; \
-	done \
+	@for i in `find tests -name '*.pb.psql' -not -path 'tests/references/*' | sort`; do \
+		rel=$${i#tests/}; \
+		diff tests/references/$$rel $$i; \
+	done
 
 
 # `docker-compose` (v1, hyphenated) is reaching EOL; prefer `docker compose`

@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+// Regression fixture for source-relative output paths.
+//
+// The base filename `asset.proto` is intentionally reused from
+// `tests/asset.proto` so that any future regression flattening the output to
+// `<basename>.<ext>` would silently overwrite one of the two `10_tables_asset.pb.psql`
+// outputs. With source-relative paths the two land at distinct locations:
+//   - tests/10_tables_asset.pb.psql       (top-level fixture)
+//   - tests/sub/10_tables_asset.pb.psql   (this fixture)
+
+package asset_sub;
+
+import "psql/psql.proto";
+
+option go_package = "intrinsec.com/test/test/sub/asset_sub;asset_sub";
+
+message Widget {
+    option (psql.tableType) = DATA;
+
+    string uuid = 1 [
+        (psql.column) = "uuid PRIMARY KEY DEFAULT gen_random_uuid()"
+    ];
+
+    string label = 2 [
+        (psql.column) = "text NOT NULL"
+    ];
+}
