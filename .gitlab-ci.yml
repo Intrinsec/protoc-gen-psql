@@ -1,0 +1,107 @@
+# GitLab CI for protoc-gen-psql (tier B Go CLI, protoc plugin).
+#
+# Pipeline stages:
+#   lint        -> golangci-lint, gitleaks
+#   test        -> unit tests, generation tests, integration tests
+#   vuln        -> govulncheck
+#   build       -> compile bin/protoc-gen-psql
+#
+# Notes:
+# - Go version pinned to match go.mod (currently 1.25). Bump in lockstep
+#   with go.mod and .pre-commit-config.yaml.
+# - golangci-lint version pinned to match local toolchain.
+# - All Go jobs use -mod=vendor so they do not download modules at CI time.
+
+stages:
+  - lint
+  - test
+  - vuln
+  - build
+
+variables:
+  GO_VERSION: "1.25"
+  GOLANGCI_LINT_VERSION: "v2.10.1"
+  GOFLAGS: "-mod=vendor"
+  GOCACHE: "${CI_PROJECT_DIR}/.cache/go-build"
+  GOMODCACHE: "${CI_PROJECT_DIR}/.cache/go-mod"
+
+default:
+  image: "golang:${GO_VERSION}"
+  cache:
+    key:
+      files:
+        - go.sum
+    paths:
+      - .cache/go-build
+      - .cache/go-mod
+
+# ---- lint ----
+
+golangci-lint:
+  stage: lint
+  image: "golangci/golangci-lint:${GOLANGCI_LINT_VERSION}"
+  script:
+    - golangci-lint run ./...
+
+gitleaks:
+  stage: lint
+  image: "zricethezav/gitleaks:latest"
+  script:
+    - gitleaks detect --source . --no-banner --redact --exit-code 1
+
+# ---- test ----
+
+unit-test:
+  stage: test
+  script:
+    - go test -mod=vendor ./... -count=1 -coverprofile=cov.out
+    - go tool cover -func=cov.out | tail -1
+  coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
+  artifacts:
+    when: always
+    paths:
+      - cov.out
+    expire_in: 1 week
+
+test-generate:
+  stage: test
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends protobuf-compiler
+  script:
+    - make test-generate
+
+test-integration:
+  stage: test
+  image: "docker:24"
+  services:
+    - docker:24-dind
+  variables:
+    DOCKER_HOST: "tcp://docker:2375"
+    DOCKER_TLS_CERTDIR: ""
+  before_script:
+    - apk add --no-cache make bash protobuf-dev go
+  script:
+    - make test-integration
+  rules:
+    # Integration tests are slower; run on default branch and MRs only.
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+# ---- vuln ----
+
+govulncheck:
+  stage: vuln
+  script:
+    - go install golang.org/x/vuln/cmd/govulncheck@latest
+    - govulncheck ./...
+
+# ---- build ----
+
+build:
+  stage: build
+  script:
+    - go build -mod=vendor -o bin/protoc-gen-psql .
+  artifacts:
+    paths:
+      - bin/protoc-gen-psql
+    expire_in: 1 week

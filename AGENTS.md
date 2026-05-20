@@ -51,9 +51,10 @@ Mandatory iagen-dev skill order for any non-trivial change:
 
 ## CI pipeline
 
-- Target: GitLab CI via `.gitlab-ci.yml` (to be bootstrapped with `isec-iagen_gitlab-cicd-go` skill).
-- Stages: lint → test → vuln → build → (optional) release.
-- Tracked in `docs/superpowers/plans/2026-05-20-onboard-ci-pipeline.md`.
+- Primary: GitHub Actions (`.github/workflows/ci.yml`) -- the repository lives on `github.com/Intrinsec/protoc-gen-psql`.
+- Mirror: `.gitlab-ci.yml` retained so the project can be moved to or mirrored on intrinsec GitLab without re-bootstrap.
+- Jobs (both surfaces): golangci-lint, gitleaks, unit-test (with coverage), test-generate, test-integration, govulncheck, build.
+- All Go jobs use `-mod=vendor` to keep builds offline-reproducible.
 
 ## Dependency policy
 
