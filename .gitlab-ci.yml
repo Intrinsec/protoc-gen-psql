@@ -19,7 +19,7 @@ stages:
   - build
 
 variables:
-  GO_VERSION: "1.25"
+  GO_VERSION: "1.26"
   GOLANGCI_LINT_VERSION: "v2.10.1"
   GOFLAGS: "-mod=vendor"
   GOCACHE: "${CI_PROJECT_DIR}/.cache/go-build"

@@ -9,7 +9,7 @@ For cascade-trigger design rationale see `docs/dev.md`.
 
 | Tool | Minimum | Install |
 |------|---------|---------|
-| Go | matches `go.mod` (currently 1.25) | https://go.dev/dl/ |
+| Go | matches `go.mod` (currently `go 1.25` directive, `toolchain go1.26.3`) | https://go.dev/dl/ |
 | `protoc` | 3.20 | `apt install protobuf-compiler` or `brew install protobuf` |
 | Docker + Compose v2 | 24.x | https://docs.docker.com/engine/install/ |
 | `golangci-lint` | 2.10.1 | https://golangci-lint.run/usage/install/ |
