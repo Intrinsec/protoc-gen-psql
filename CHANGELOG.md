@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.0.13] - 2026-05-20
+
+Release-automation bring-up. No change to generated PostgreSQL output.
+
+### Added
+
+- `.goreleaser.yaml` and a `release` job in `.github/workflows/ci.yml`
+  gated on `refs/tags/v*`. Tag pushes (`vX.Y.Z`) now publish a complete
+  release without manual `gh release` steps.
+- Per-platform binaries: linux/{amd64,arm64} + darwin/{amd64,arm64} as
+  `protoc-gen-psql_<version>_<os>_<arch>.tar.gz`.
+- Per-platform CycloneDX SBOM via `syft` (binary-based scan, not just
+  module graph) as `sbom_<os>_<arch>.cdx.json`.
+- `SHA256SUMS` signed with `cosign sign-blob` (keyless, sigstore OIDC)
+  producing `SHA256SUMS.sig`.
+
+The release job depends on the full CI matrix (lint, unit-test,
+test-generate, test-integration, govulncheck, build, sbom,
+license-check). A tag that fails any gate never publishes binaries.
+
 ## [0.0.12] - 2026-05-20
 
 Toolchain and dependency refresh. No change to generated PostgreSQL output.
@@ -108,6 +128,7 @@ behavioural change to the generated PostgreSQL output.
 - All Go-module CVEs reported against earlier dependency versions cleared
   by the dep refresh.
 
-[Unreleased]: https://github.com/Intrinsec/protoc-gen-psql/compare/v0.0.12...HEAD
+[Unreleased]: https://github.com/Intrinsec/protoc-gen-psql/compare/v0.0.13...HEAD
+[0.0.13]: https://github.com/Intrinsec/protoc-gen-psql/compare/v0.0.12...v0.0.13
 [0.0.12]: https://github.com/Intrinsec/protoc-gen-psql/compare/v0.0.11...v0.0.12
 [0.0.11]: https://github.com/Intrinsec/protoc-gen-psql/compare/v0.0.10...v0.0.11
