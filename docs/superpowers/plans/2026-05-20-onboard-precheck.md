@@ -43,6 +43,17 @@ Records the baseline captured during onboard on **2026-05-20**.
 ## Run history
 
 <!-- Append a block per run -->
+
+### 2026-05-20 by Stany MARCEL (Claude Opus 4.7, onboard/baseline-precheck)
+
+- Tooling — golangci-lint 2.10.1 ✓, govulncheck v1.2.0 ✓, go 1.26.2 ✓, protoc **missing** ✗, docker compose v5.0.2 ✓.
+- golangci-lint: 1 issue (delta vs baseline: 0). `errcheck` on `pgs.Walk(v, field)` in `psqlify.go`.
+- govulncheck: 0 reachable (delta: 0). 3 indirect + 8 module-level CVEs unchanged.
+- go test: 5 passed in 2 packages (delta: 0).
+- make test-generate: **blocked** — `protoc: command not found`, `make: *** [Makefile:29: psql/psql.pb.go] Error 127`.
+- make test-integration: **skipped** — build depends on protoc-generated `psql/psql.pb.go`.
+- Notes: Install `protoc` (apt `protobuf-compiler` or `brew install protobuf`) to unblock generation + integration paths. Tracked as prerequisite gate in `2026-05-20-onboard-dev-guide.md`.
+
 <!--
 ### 2026-MM-DD by <name>
 - golangci-lint: <count> (delta vs baseline: <±N>)
