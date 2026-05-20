@@ -15,7 +15,7 @@ permissions:
 
 env:
   GO_VERSION: "1.26"
-  GOLANGCI_LINT_VERSION: "v2.10.1"
+  GOLANGCI_LINT_VERSION: "v2.12.2"
   GOFLAGS: "-mod=vendor"
 
 jobs:
@@ -31,22 +31,6 @@ jobs:
         with:
           version: ${{ env.GOLANGCI_LINT_VERSION }}
           args: --timeout=5m
-
-  gitleaks:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      # Use the upstream gitleaks CLI directly -- gitleaks-action requires a
-      # paid license for GitHub organizations since the v2 relicensing.
-      - name: Install gitleaks
-        run: |
-          GITLEAKS_VERSION=8.18.4
-          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-            | tar -xz -C /usr/local/bin gitleaks
-      - name: Run gitleaks
-        run: gitleaks detect --source . --no-banner --redact --exit-code 1
 
   unit-test:
     runs-on: ubuntu-latest

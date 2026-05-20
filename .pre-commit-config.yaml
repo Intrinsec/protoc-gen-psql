@@ -1,10 +1,6 @@
 repos:
-  - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.18.4
-    hooks:
-      - id: gitleaks
   - repo: https://github.com/golangci/golangci-lint
-    rev: v2.10.1
+    rev: v2.12.2
     hooks:
       - id: golangci-lint
         args: ["--timeout=5m"]

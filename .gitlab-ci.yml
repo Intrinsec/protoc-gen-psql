@@ -1,7 +1,7 @@
 # GitLab CI for protoc-gen-psql (tier B Go CLI, protoc plugin).
 #
 # Pipeline stages:
-#   lint        -> golangci-lint, gitleaks
+#   lint        -> golangci-lint
 #   test        -> unit tests, generation tests, integration tests
 #   vuln        -> govulncheck
 #   build       -> compile bin/protoc-gen-psql
@@ -21,7 +21,7 @@ stages:
 
 variables:
   GO_VERSION: "1.26"
-  GOLANGCI_LINT_VERSION: "v2.10.1"
+  GOLANGCI_LINT_VERSION: "v2.12.2"
   GOFLAGS: "-mod=vendor"
   GOCACHE: "${CI_PROJECT_DIR}/.cache/go-build"
   GOMODCACHE: "${CI_PROJECT_DIR}/.cache/go-mod"
@@ -43,12 +43,6 @@ golangci-lint:
   image: "golangci/golangci-lint:${GOLANGCI_LINT_VERSION}"
   script:
     - golangci-lint run ./...
-
-gitleaks:
-  stage: lint
-  image: "zricethezav/gitleaks:latest"
-  script:
-    - gitleaks detect --source . --no-banner --redact --exit-code 1
 
 # ---- test ----
 

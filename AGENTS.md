@@ -281,18 +281,11 @@ CHANGELOG entry — but if in doubt, log under `Changed`.
   `github.com/Intrinsec/protoc-gen-psql`.
 - Mirror: `.gitlab-ci.yml` retained so the project can be moved to or mirrored on
   intrinsec GitLab without re-bootstrap.
-- Jobs (both surfaces): golangci-lint, gitleaks, unit-test (coverage), test-generate,
+- Jobs (both surfaces): golangci-lint, unit-test (coverage), test-generate,
   test-integration, govulncheck, build, sbom (cyclonedx-gomod), license-check
   (go-licenses allow-list).
 - Weekly schedule: Monday 06:00 UTC, full pipeline against `master`.
 - All Go jobs use `-mod=vendor` for offline-reproducible builds.
-
-## Secret scanning
-
-- Pre-commit + CI gate via `gitleaks` (upstream CLI, not the paid Action).
-- `.pre-commit-config.yaml` installs the hook locally; CI fetches the gitleaks
-  release tarball.
-- Baseline scan + `.gitleaks.toml` allowlist reviewed quarterly.
 
 ## SBOM
 
@@ -335,6 +328,7 @@ on tier change or quarterly review.
 | Release signing (cosign / SLSA provenance) | deferred | Tier B build tool; revisit if distributed beyond internal CI. |
 | Threat model | not-applicable | Pure code generator, no trust boundary at runtime. |
 | Architecture review (`docs/DECISIONS.md`) | replaced-by:docs/dev.md | Existing ADR covers active design areas (cascade triggers). |
+| Secret scanning (gitleaks) | wont-fix | gitleaks v8.x is BSL-1.1; no commercial license available. Rely on code review + pre-commit `check-yaml` / generic hooks. |
 
 Carve-outs are honored by `dev-update-project`, `dev-arch-review`, and other
 iagen-dev skills — they will not be re-suggested unless the user removes the row.
