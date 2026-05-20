@@ -1,0 +1,49 @@
+version: 2
+
+# No `before.hooks`: the plugin binary builds straight from the vendored
+# module tree (`-mod=vendor`); `make test-generate` only produces test
+# fixtures unused by the released artifact, and `go mod tidy` would risk
+# dirtying the git tree, aborting `goreleaser release --clean`.
+
+builds:
+  - id: protoc-gen-psql
+    main: ./
+    binary: protoc-gen-psql
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -mod=vendor
+      - -trimpath
+    ldflags:
+      - -s -w
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+
+archives:
+  - id: archive
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "SHA256SUMS"
+  algorithm: sha256
+
+signs:
+  - cmd: cosign
+    args:
+      - sign-blob
+      - --yes
+      - --output-signature
+      - "${signature}"
+      - "${artifact}"
+    artifacts: checksum
+    signature: "${artifact}.sig"
+
+sboms:
+  - artifacts: archive
+    documents:
+      - "sbom_{{ .Os }}_{{ .Arch }}.cdx.json"
+
+release:
+  draft: false
+  prerelease: auto
