@@ -92,7 +92,7 @@ test-integration:
 govulncheck:
   stage: vuln
   script:
-    - go install golang.org/x/vuln/cmd/govulncheck@latest
+    - GOFLAGS= go install golang.org/x/vuln/cmd/govulncheck@latest
     - govulncheck ./...
 
 # ---- build ----

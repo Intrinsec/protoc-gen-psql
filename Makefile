@@ -25,8 +25,13 @@ build: bin/protoc-gen-$(NAME)
 install: $(NAME)/$(NAME).pb.go
 	@go install -mod=vendor -v .
 
+# Resolve protoc's well-known type include dir (e.g. google/protobuf/descriptor.proto).
+# `protobuf-compiler` on Debian/Ubuntu installs them under /usr/include; on macOS
+# (Homebrew) they live under $(brew --prefix)/include. Fall back to /usr/include.
+PROTOC_WKT_INCLUDE ?= $(shell test -d /opt/homebrew/include/google/protobuf && echo /opt/homebrew/include || echo /usr/include)
+
 $(NAME)/$(NAME).pb.go: bin/protoc-gen-go $(NAME)/$(NAME).proto
-	@cd $(NAME) && protoc -I . \
+	@cd $(NAME) && protoc -I . -I $(PROTOC_WKT_INCLUDE) \
 		--plugin=protoc-gen-go=$(shell pwd)/bin/protoc-gen-go \
 		--go_opt=paths=source_relative \
 		--go_out="${GO_IMPORT}:." $(NAME).proto
@@ -46,7 +51,7 @@ vendor:
 
 .PHONY: test-generate
 test-generate: build
-	@protoc -I . --plugin=protoc-gen-$(NAME)=$(shell pwd)/bin/protoc-gen-$(NAME) --$(NAME)_out="." tests/*.proto
+	@protoc -I . -I $(PROTOC_WKT_INCLUDE) --plugin=protoc-gen-$(NAME)=$(shell pwd)/bin/protoc-gen-$(NAME) --$(NAME)_out="." tests/*.proto
 	@cat tests/*.pb.psql
 	# Checking diff between generated file and reference file
 	# If the following is empty then the file are identical
@@ -55,15 +60,19 @@ test-generate: build
 	done \
 
 
+# `docker-compose` (v1, hyphenated) is reaching EOL; prefer `docker compose`
+# (v2 plugin). Fall back to the legacy binary if v2 is not installed.
+DOCKER_COMPOSE ?= $(shell docker compose version >/dev/null 2>&1 && echo 'docker compose' || echo 'docker-compose')
+
 .PHONY: build-docker
 build-docker:
-	docker-compose -p $(NAME)-$(CI_JOB_ID) -f ./tests/docker-compose.tests.yml build
+	$(DOCKER_COMPOSE) -p $(NAME)-$(CI_JOB_ID) -f ./tests/docker-compose.tests.yml build
 
 .PHONY: test-integration
 test-integration: build
-	docker-compose -p $(NAME)-$(CI_JOB_ID) -f ./tests/docker-compose.tests.yml rm -f
-	docker-compose -p $(NAME)-$(CI_JOB_ID) -f ./tests/docker-compose.tests.yml up --exit-code-from=client
-	docker-compose -p $(NAME)-$(CI_JOB_ID) -f ./tests/docker-compose.tests.yml down -v
+	$(DOCKER_COMPOSE) -p $(NAME)-$(CI_JOB_ID) -f ./tests/docker-compose.tests.yml rm -f
+	$(DOCKER_COMPOSE) -p $(NAME)-$(CI_JOB_ID) -f ./tests/docker-compose.tests.yml up --exit-code-from=client
+	$(DOCKER_COMPOSE) -p $(NAME)-$(CI_JOB_ID) -f ./tests/docker-compose.tests.yml down -v
 
 
 .PHONY: test
