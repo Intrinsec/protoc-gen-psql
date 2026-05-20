@@ -5,8 +5,7 @@ go 1.25.0
 toolchain go1.26.3
 
 require (
-	github.com/golang/protobuf v1.5.4
-	github.com/lyft/protoc-gen-star v0.6.2
+	github.com/lyft/protoc-gen-star/v2 v2.0.4
 	google.golang.org/protobuf v1.36.11
 )
 

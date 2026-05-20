@@ -1,14 +1,7 @@
-# github.com/golang/protobuf v1.5.4
+# github.com/lyft/protoc-gen-star/v2 v2.0.4
 ## explicit; go 1.17
-github.com/golang/protobuf/internal/gengogrpc
-github.com/golang/protobuf/proto
-github.com/golang/protobuf/protoc-gen-go
-github.com/golang/protobuf/protoc-gen-go/descriptor
-github.com/golang/protobuf/protoc-gen-go/plugin
-# github.com/lyft/protoc-gen-star v0.6.2
-## explicit; go 1.14
-github.com/lyft/protoc-gen-star
-github.com/lyft/protoc-gen-star/lang/go
+github.com/lyft/protoc-gen-star/v2
+github.com/lyft/protoc-gen-star/v2/lang/go
 # github.com/spf13/afero v1.15.0
 ## explicit; go 1.23.0
 github.com/spf13/afero
@@ -41,6 +34,7 @@ golang.org/x/tools/internal/imports
 golang.org/x/tools/internal/stdlib
 # google.golang.org/protobuf v1.36.11
 ## explicit; go 1.23
+google.golang.org/protobuf/cmd/protoc-gen-go
 google.golang.org/protobuf/cmd/protoc-gen-go/internal_gengo
 google.golang.org/protobuf/compiler/protogen
 google.golang.org/protobuf/encoding/prototext

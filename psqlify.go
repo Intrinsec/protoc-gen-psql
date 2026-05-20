@@ -11,7 +11,7 @@ import (
 	"bytes"
 
 	psql "github.com/intrinsec/protoc-gen-psql/psql"
-	pgs "github.com/lyft/protoc-gen-star"
+	pgs "github.com/lyft/protoc-gen-star/v2"
 )
 
 var (

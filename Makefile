@@ -8,14 +8,10 @@ SHELL := /bin/bash
 CI_JOB_ID ?= local
 export CI_JOB_ID
 
-# protoc-gen-go parameters for properly generating the import path for PGV
-GO_IMPORT_SPACES := M$(NAME)/$(NAME).proto=${PACKAGE}/$(NAME),\
-	Mgoogle/protobuf/any.proto=github.com/golang/protobuf/ptypes/any,\
-	Mgoogle/protobuf/duration.proto=github.com/golang/protobuf/ptypes/duration,\
-	Mgoogle/protobuf/struct.proto=github.com/golang/protobuf/ptypes/struct,\
-	Mgoogle/protobuf/timestamp.proto=github.com/golang/protobuf/ptypes/timestamp,\
-	Mgoogle/protobuf/wrappers.proto=github.com/golang/protobuf/ptypes/wrappers,\
-	Mgoogle/protobuf/descriptor.proto=github.com/golang/protobuf/protoc-gen-go/descriptor
+# protoc-gen-go import remap for the local psql package.
+# Well-known types resolve via google.golang.org/protobuf/types/* by default —
+# no M-mappings required.
+GO_IMPORT_SPACES := M$(NAME)/$(NAME).proto=${PACKAGE}/$(NAME)
 GO_IMPORT:=$(subst $(space),,$(GO_IMPORT_SPACES))
 
 .PHONY: build
