@@ -23,7 +23,7 @@ build: bin/protoc-gen-$(NAME)
 
 .PHONY: install
 install: $(NAME)/$(NAME).pb.go
-	@go install -v .
+	@go install -mod=vendor -v .
 
 $(NAME)/$(NAME).pb.go: bin/protoc-gen-go $(NAME)/$(NAME).proto
 	@cd $(NAME) && protoc -I . \
@@ -32,11 +32,16 @@ $(NAME)/$(NAME).pb.go: bin/protoc-gen-go $(NAME)/$(NAME).proto
 		--go_out="${GO_IMPORT}:." $(NAME).proto
 
 bin/protoc-gen-go:
-	@GOBIN=$(shell pwd)/bin go install google.golang.org/protobuf/cmd/protoc-gen-go
+	@GOBIN=$(shell pwd)/bin go install -mod=mod google.golang.org/protobuf/cmd/protoc-gen-go
 
 
 bin/protoc-gen-$(NAME): $(NAME)/$(NAME).pb.go $(wildcard *.go)
-	@GOBIN=$(shell pwd)/bin go install .
+	@GOBIN=$(shell pwd)/bin go install -mod=vendor .
+
+.PHONY: vendor
+vendor:
+	@go mod tidy
+	@go mod vendor
 
 
 .PHONY: test-generate
