@@ -1,0 +1,58 @@
+version: "2"
+
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+  build-tags: []
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - ineffassign
+    - unused
+    - misspell
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+    misspell:
+      locale: US
+
+  exclusions:
+    presets:
+      - common-false-positives
+      - legacy
+    paths:
+      - psql/psql\.pb\.go$
+      - tests/.*\.pb\.go$
+      - vendor/.*
+    rules:
+      - path: _test\.go$
+        linters:
+          - errcheck
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+output:
+  formats:
+    text:
+      path: stdout
+
+formatters:
+  enable:
+    - gofmt
+  exclusions:
+    paths:
+      - psql/psql\.pb\.go$
+      - tests/.*\.pb\.go$
+      - vendor/.*

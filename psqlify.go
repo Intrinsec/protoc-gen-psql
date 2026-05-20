@@ -117,7 +117,7 @@ func getStringBufferWithHeader(buf *bytes.Buffer, fileName string) (string, int)
 	return fmt.Sprintf("-- File: %s\n%s", fileName, out), len(out)
 }
 
-// PSQLVisitor represent a visitor to walk the proto tree and analyse content
+// PSQLVisitor represent a visitor to walk the proto tree and analyze content
 // (File, Messages, Fields, options)
 type PSQLVisitor struct {
 	pgs.Visitor
@@ -222,16 +222,16 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 	constraints := make([]string, 0)
 	relayCascadeUpdates := make([]*psql.RelayCascadeUpdate, 0)
 
-	if ok, err := m.Extension(psql.E_Prefix, &prefixes); ok && err != nil {
-		v.Logf("Error can't retrieve prefix extensions for message %s with error: %s", m.Name().String(), err)
+	if okExt, errExt := m.Extension(psql.E_Prefix, &prefixes); okExt && errExt != nil {
+		v.Logf("Error can't retrieve prefix extensions for message %s with error: %s", m.Name().String(), errExt)
 	}
 
-	if ok, err := m.Extension(psql.E_Constraint, &constraints); ok && err != nil {
-		v.Logf("Error can't retrieve constraint extensions for message %s with error: %s", m.Name().String(), err)
+	if okExt, errExt := m.Extension(psql.E_Constraint, &constraints); okExt && errExt != nil {
+		v.Logf("Error can't retrieve constraint extensions for message %s with error: %s", m.Name().String(), errExt)
 	}
 
-	if ok, err := m.Extension(psql.E_Suffix, &suffixes); ok && err != nil {
-		v.Logf("Error can't retrieve suffix extensions for message %s with error: %s", m.Name().String(), err)
+	if okExt, errExt := m.Extension(psql.E_Suffix, &suffixes); okExt && errExt != nil {
+		v.Logf("Error can't retrieve suffix extensions for message %s with error: %s", m.Name().String(), errExt)
 	}
 
 	ok, err = m.Extension(psql.E_RelayCascadeUpdate, &relayCascadeUpdates)
@@ -242,7 +242,7 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 	}
 
 	for _, field := range m.Fields() {
-		pgs.Walk(v, field)
+		v.CheckErr(pgs.Walk(v, field), "unable to walk field")
 	}
 
 	var templateText string
@@ -446,7 +446,7 @@ func generateIdentifierName(name string, prefixSize int, parameters ...string) (
 		CHECKSUM_SIZE)
 
 	parameterSizeMap := allocateRoomToParameters(totalParametersSize, parameters...)
-	// iterate over parameters instead of parameterSizeMap to keep a consistant order (hashmap is unordered).
+	// iterate over parameters instead of parameterSizeMap to keep a consistent order (hashmap is unordered).
 	for _, parameter := range parameters {
 		size := parameterSizeMap[parameter]
 		identifier += fmt.Sprintf("_%s", parameter[:size])

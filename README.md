@@ -63,3 +63,9 @@ Do a `make test-generate` to view a code generated example.
 To test the generate psql code, do a `make test`.
 
 The directory `tests` contains several proto coverage multiple use cases.
+
+## Contributing
+
+See [`docs/DEVELOPMENT.md`](docs/DEVELOPMENT.md) for build, test and release
+procedures, and [`AGENTS.md`](AGENTS.md) for the iagen-dev operational contract
+(tier B, type 2 Go CLI) and the carve-outs that apply to this project.
