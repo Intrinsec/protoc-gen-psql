@@ -44,7 +44,7 @@ Records the baseline captured during onboard on **2026-05-20**.
 
 <!-- Append a block per run -->
 
-### 2026-05-20 by Stany MARCEL (Claude Opus 4.7, onboard/baseline-precheck)
+### 2026-05-20 by Stany MARCEL (Claude Opus 4.7, onboard/baseline-precheck) -- initial baseline
 
 - Tooling — golangci-lint 2.10.1 ✓, govulncheck v1.2.0 ✓, go 1.26.2 ✓, protoc **missing** ✗, docker compose v5.0.2 ✓.
 - golangci-lint: 1 issue (delta vs baseline: 0). `errcheck` on `pgs.Walk(v, field)` in `psqlify.go`.
@@ -53,6 +53,19 @@ Records the baseline captured during onboard on **2026-05-20**.
 - make test-generate: **blocked** — `protoc: command not found`, `make: *** [Makefile:29: psql/psql.pb.go] Error 127`.
 - make test-integration: **skipped** — build depends on protoc-generated `psql/psql.pb.go`.
 - Notes: Install `protoc` (apt `protobuf-compiler` or `brew install protobuf`) to unblock generation + integration paths. Tracked as prerequisite gate in `2026-05-20-onboard-dev-guide.md`.
+
+### 2026-05-20 by Stany MARCEL (Claude Opus 4.7, onboard/baseline-precheck) -- post-corrections
+
+After applying go-version-bump + dep-update, linting, dev-guide, dep-policy,
+secret-scanning, vendoring, ci-pipeline correction plans on the same branch.
+
+- Tooling — golangci-lint 2.10.1 ✓, govulncheck v1.2.0 ✓, go 1.26.2 ✓ (module now declares 1.25.0), gitleaks **missing** locally ✗ (CI uses container), protoc still missing locally ✗ (CI installs it).
+- golangci-lint: **0 issues** (delta vs baseline: **-1**). Strict v2 config now enforced (govet enable-all minus fieldalignment, errcheck, staticcheck, ineffassign, unused, misspell, gofmt).
+- govulncheck: 0 reachable (delta: 0). 3 indirect + 5 module-level CVEs (delta: **-3** after dep bumps).
+- go test: 5 passed in 2 packages (delta: 0). Coverage: 11.0% total -- raise via `testing` correction plan.
+- make test-generate: still blocked locally (protoc absent). CI job `test-generate` installs `protobuf-compiler` and exercises this path.
+- make test-integration: still blocked locally (no Docker DinD here). CI job `test-integration` runs against ephemeral PostgreSQL.
+- Notes: vendor/ now committed; all Go jobs use `-mod=vendor`. Pipeline configured for both GitHub Actions (primary) and GitLab CI (mirror).
 
 <!--
 ### 2026-MM-DD by <name>
