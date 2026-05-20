@@ -1,0 +1,54 @@
+# Onboard Precheck — protoc-gen-psql
+
+## Goal
+
+Re-runnable diagnostic. Run before and after correction plans to verify state.
+Records the baseline captured during onboard on **2026-05-20**.
+
+## Baseline (frozen)
+
+| Check | Tool version | Result | Exit code |
+|-------|--------------|--------|-----------|
+| `golangci-lint --version` | 2.10.1 (go1.26.0) | installed | 0 |
+| `govulncheck -version` | v1.2.0 (DB 2026-05-07) | installed | 0 |
+| `go version` | go1.26.2 linux/amd64 | installed (module declares 1.17) | 0 |
+| `golangci-lint run ./...` | — | 1 issue: `errcheck` on `pgs.Walk(v, field)` in `psqlify.go` | 0 (default config tolerant) |
+| `govulncheck ./...` | — | 0 reachable; 3 in imports + 8 in modules (not called) | 0 |
+| `go test ./... -count=1 -short` | — | 5 passed in 2 packages | 0 |
+| `make test-generate` | — | not run during baseline (requires `protoc` + plugin build) | — |
+| `make test-integration` | — | not run during baseline (requires Docker) | — |
+
+## Tasks
+
+### Task 1: Verify tooling installed
+
+- [ ] `golangci-lint --version` exits 0; version ≥ 1.55. Run `/isec-iagen_lint-go-install` if missing.
+- [ ] `govulncheck -version` exits 0. Run `/isec-iagen_govulncheck-install` if missing.
+- [ ] `go version` exits 0; version ≥ go.mod declared.
+- [ ] `protoc --version` exits 0 (required by `make test-generate`).
+- [ ] `docker compose version` exits 0 (required by `make test-integration`).
+
+### Task 2: Run all mandatory checks
+
+- [ ] `golangci-lint run ./...` — record issue count, compare to baseline (1).
+- [ ] `govulncheck ./...` — record reachable CVE count, compare to baseline (0).
+- [ ] `go test ./... -count=1 -short` — record pass/fail (baseline: 5 passed).
+- [ ] `make test-generate` — must exit 0 with empty diff against `tests/references/`.
+- [ ] `make test-integration` — must exit 0 (client container reports OK).
+
+### Task 3: Report deltas
+
+- [ ] Append run result + delta vs baseline to this plan file under `## Run history` (date, executor, each check result, regressions if any).
+
+## Run history
+
+<!-- Append a block per run -->
+<!--
+### 2026-MM-DD by <name>
+- golangci-lint: <count> (delta vs baseline: <±N>)
+- govulncheck: <count> (delta: <±N>)
+- go test: <pass/fail>
+- make test-generate: <ok/diff>
+- make test-integration: <ok/fail>
+- Notes: ...
+-->
