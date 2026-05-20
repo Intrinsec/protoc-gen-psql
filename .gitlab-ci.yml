@@ -67,7 +67,7 @@ unit-test:
 test-generate:
   stage: test
   before_script:
-    - apt-get update && apt-get install -y --no-install-recommends protobuf-compiler
+    - apt-get update && apt-get install -y --no-install-recommends protobuf-compiler libprotobuf-dev
   script:
     - make test-generate
 
@@ -123,7 +123,7 @@ license-check:
   stage: supply-chain
   script:
     - GOFLAGS= go install github.com/google/go-licenses@latest
-    - go-licenses report ./... --template '{{range .}}{{.Name}},{{.LicenseName}},{{.LicenseURL}}{{"\n"}}{{end}}' > licenses.csv
+    - go-licenses csv ./... > licenses.csv
     - go-licenses check ./... --allowed_licenses="Apache-2.0,BSD-2-Clause,BSD-3-Clause,MIT,ISC,MPL-2.0"
   artifacts:
     when: always

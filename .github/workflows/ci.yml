@@ -73,10 +73,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-      - name: Install protoc
+      - name: Install protoc + well-known type protos
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends protobuf-compiler
+          # libprotobuf-dev ships /usr/include/google/protobuf/*.proto
+          sudo apt-get install -y --no-install-recommends protobuf-compiler libprotobuf-dev
       - name: make test-generate
         run: make test-generate
 
@@ -87,10 +88,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-      - name: Install protoc
+      - name: Install protoc + well-known type protos
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends protobuf-compiler
+          sudo apt-get install -y --no-install-recommends protobuf-compiler libprotobuf-dev
       - name: make test-integration
         run: make test-integration
 
@@ -155,7 +156,7 @@ jobs:
           GOFLAGS: ""
         run: go install github.com/google/go-licenses@latest
       - name: Export license inventory
-        run: go-licenses report ./... --template '{{range .}}{{.Name}},{{.LicenseName}},{{.LicenseURL}}{{"\n"}}{{end}}' > licenses.csv
+        run: go-licenses csv ./... > licenses.csv
       - name: Enforce allow-list
         run: |
           go-licenses check ./... \
