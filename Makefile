@@ -50,10 +50,10 @@ PROTO_FIXTURES := $(sort $(shell find tests -name '*.proto' -not -path 'tests/bu
 .PHONY: test-generate
 test-generate: build
 	@protoc -I . -I $(PROTOC_WKT_INCLUDE) --plugin=protoc-gen-$(NAME)=$(shell pwd)/bin/protoc-gen-$(NAME) --$(NAME)_out="." $(PROTO_FIXTURES)
-	@find tests -name '*.pb.psql' -not -path 'tests/references/*' -exec cat {} \;
+	@find tests -name '*.pb.psql' -not -path 'tests/references/*' -not -path 'tests/buf/*' -exec cat {} \;
 	# Checking diff between generated file and reference file
 	# If the following is empty then the file are identical
-	@for i in `find tests -name '*.pb.psql' -not -path 'tests/references/*' | sort`; do \
+	@for i in `find tests -name '*.pb.psql' -not -path 'tests/references/*' -not -path 'tests/buf/*' | sort`; do \
 		rel=$${i#tests/}; \
 		diff tests/references/$$rel $$i; \
 	done
@@ -77,7 +77,7 @@ test-buf-generate: build
 		test -f $$gen || { echo "FAIL: expected source-relative output $$gen missing"; exit 1; }; \
 		diff $$ref $$gen || { echo "FAIL: $$gen differs from reference (source-relative regression)"; exit 1; }; \
 	done
-	@rm -f tests/buf/buf.gen.local.yaml tests/buf/buf.stderr.txt
+	@rm -rf tests/buf/gen tests/buf/buf.gen.local.yaml tests/buf/buf.stderr.txt tests/buf/proto/psql
 	@echo "test-buf-generate OK"
 
 
