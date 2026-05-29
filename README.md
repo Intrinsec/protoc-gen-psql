@@ -8,6 +8,27 @@ This project uses [protoc-gen-star](https://github.com/lyft/protoc-gen-star) to 
 
 See `./tests/asset.proto` for example on how to use it.
 
+### Minimal annotated example
+
+A message becomes a PostgreSQL table only when it carries the `(psql.tableType)`
+extension. Import the extension definitions, mark the message, and annotate columns:
+
+```proto
+import "psql/psql.proto";
+
+message Tenant {
+  option (psql.tableType) = DATA;                                  // -> 10_tables_*.pb.psql
+
+  string id   = 1 [(psql.column) = "uuid PRIMARY KEY DEFAULT gen_random_uuid()"];
+  string name = 2 [(psql.column) = "text NOT NULL"];
+}
+```
+
+- `option (psql.tableType) = DATA;` marks the message as a data table; its columns land in
+  `10_tables_<file>.pb.psql`. Use `RELATION` for relation tables (`20_relations_<file>.pb.psql`).
+- Each field's `(psql.column)` string is emitted verbatim after the column name.
+- Messages **without** `(psql.tableType)` are skipped silently (set `DEBUG_PGV=1` to log skips).
+
 ## Options
 
 The plugin support the following options.

@@ -6,6 +6,34 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-05-29
+
+Quieter `buf generate` output and regression coverage for source-relative
+paths. No change to the contents of generated PostgreSQL statements.
+
+### Changed
+
+- Per-message "skip" and "generation disabled" lines are now debug-only.
+  A message without `(psql.tableType)` is the normal case, not a warning, so
+  these lines moved from `Logf` to `Debugf`: silent by default, re-enabled with
+  `DEBUG_PGV=1`. Fixes the ~1-line-per-message stderr flood on annotation-free
+  workspaces under `buf generate`.
+
+### Added
+
+- buf-based regression test (`make test-buf-generate`) driving `buf generate`
+  with `paths=source_relative` against `tests/buf/`, asserting nested
+  source-relative output and clean stderr. Added a matching CI job, gated into
+  the release.
+- README section documenting the `tableType` / `column` extensions with a
+  worked example.
+
+### Notes
+
+- `paths=source_relative` has been honoured since the `protoc-gen-star/v2`
+  migration (0.0.12); output is derived from the proto's source path. The new
+  test guards against regression — no code change was required.
+
 ## [0.0.13] - 2026-05-20
 
 Release-automation bring-up. No change to generated PostgreSQL output.

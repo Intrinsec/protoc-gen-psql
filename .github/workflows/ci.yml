@@ -66,6 +66,25 @@ jobs:
       - name: make test-generate
         run: make test-generate
 
+  test-buf-generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Install protoc + well-known type protos
+        run: |
+          sudo apt-get update
+          # build target regenerates psql/psql.pb.go via protoc-gen-go
+          sudo apt-get install -y --no-install-recommends protobuf-compiler libprotobuf-dev
+      - name: Install buf
+        env:
+          GOFLAGS: ""
+        run: go install github.com/bufbuild/buf/cmd/buf@v1.50.0
+      - name: make test-buf-generate
+        run: make test-buf-generate
+
   test-integration:
     runs-on: ubuntu-latest
     steps:
@@ -157,7 +176,7 @@ jobs:
     name: release
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
-    needs: [lint, unit-test, test-generate, test-integration, govulncheck, build, sbom, license-check]
+    needs: [lint, unit-test, test-generate, test-buf-generate, test-integration, govulncheck, build, sbom, license-check]
     permissions:
       contents: write
       id-token: write

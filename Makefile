@@ -45,18 +45,40 @@ vendor:
 	@go mod vendor
 
 
-PROTO_FIXTURES := $(sort $(shell find tests -name '*.proto'))
+PROTO_FIXTURES := $(sort $(shell find tests -name '*.proto' -not -path 'tests/buf/*'))
 
 .PHONY: test-generate
 test-generate: build
 	@protoc -I . -I $(PROTOC_WKT_INCLUDE) --plugin=protoc-gen-$(NAME)=$(shell pwd)/bin/protoc-gen-$(NAME) --$(NAME)_out="." $(PROTO_FIXTURES)
-	@find tests -name '*.pb.psql' -not -path 'tests/references/*' -exec cat {} \;
+	@find tests -name '*.pb.psql' -not -path 'tests/references/*' -not -path 'tests/buf/*' -exec cat {} \;
 	# Checking diff between generated file and reference file
 	# If the following is empty then the file are identical
-	@for i in `find tests -name '*.pb.psql' -not -path 'tests/references/*' | sort`; do \
+	@for i in `find tests -name '*.pb.psql' -not -path 'tests/references/*' -not -path 'tests/buf/*' | sort`; do \
 		rel=$${i#tests/}; \
 		diff tests/references/$$rel $$i; \
 	done
+
+.PHONY: test-buf-generate
+test-buf-generate: build
+	@mkdir -p tests/buf/proto/psql && cp -f $(NAME)/$(NAME).proto tests/buf/proto/psql/$(NAME).proto
+	@sed 's#PSQL_BIN_PLACEHOLDER#$(shell pwd)/bin/protoc-gen-$(NAME)#' tests/buf/buf.gen.yaml > tests/buf/buf.gen.local.yaml
+	@cd tests/buf && rm -rf gen && buf generate proto --template buf.gen.local.yaml 2>buf.stderr.txt; status=$$?; \
+		cat buf.stderr.txt; \
+		if grep -q "Unable to find an extension tableType" buf.stderr.txt; then \
+			echo "FAIL: skip-message noise leaked to stderr (Issue 1 regression)"; exit 1; \
+		fi; \
+		test $$status -eq 0 || { echo "FAIL: buf generate exited $$status"; exit $$status; }
+	# Checking every reference has a byte-identical generated counterpart at its
+	# nested (source-relative) path. Iterating references — not generated files —
+	# so a dropped output fails loudly instead of passing trivially.
+	@for ref in `find tests/buf/references -name '*.pb.psql' | sort`; do \
+		rel=$${ref#tests/buf/references/}; \
+		gen=tests/buf/$$rel; \
+		test -f $$gen || { echo "FAIL: expected source-relative output $$gen missing"; exit 1; }; \
+		diff $$ref $$gen || { echo "FAIL: $$gen differs from reference (source-relative regression)"; exit 1; }; \
+	done
+	@rm -rf tests/buf/gen tests/buf/buf.gen.local.yaml tests/buf/buf.stderr.txt tests/buf/proto/psql
+	@echo "test-buf-generate OK"
 
 
 # `docker-compose` (v1, hyphenated) is reaching EOL; prefer `docker compose`
@@ -75,12 +97,13 @@ test-integration: build
 
 
 .PHONY: test
-test: build test-generate test-integration
+test: build test-generate test-buf-generate test-integration
 
 
 .PHONY: clean
 clean:
 	@rm -fv tests/*.psql
+	@rm -rf tests/buf/gen tests/buf/buf.gen.local.yaml tests/buf/buf.stderr.txt tests/buf/proto/psql
 
 
 .PHONY: distclean

@@ -191,7 +191,7 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 	var w *io.Writer
 
 	if ok, err := m.Extension(psql.E_Disabled, &disabled); ok && err == nil && disabled {
-		v.Logf("Generation disabled for message %s", m.Name().String())
+		v.Debugf("Generation disabled for message %s", m.Name().String())
 		return nil, nil
 	}
 
@@ -202,7 +202,7 @@ func (v *PSQLVisitor) VisitMessage(m pgs.Message) (pgs.Visitor, error) {
 	}
 
 	if !ok {
-		v.Logf("Unable to find an extension tableType equal to DATA or RELATION. Skipping message: %s", m.Name().String())
+		v.Debugf("Unable to find an extension tableType equal to DATA or RELATION. Skipping message: %s", m.Name().String())
 		return nil, nil
 	}
 
