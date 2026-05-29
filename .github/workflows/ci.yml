@@ -73,6 +73,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
+      - name: Install protoc + well-known type protos
+        run: |
+          sudo apt-get update
+          # build target regenerates psql/psql.pb.go via protoc-gen-go
+          sudo apt-get install -y --no-install-recommends protobuf-compiler libprotobuf-dev
       - name: Install buf
         env:
           GOFLAGS: ""
