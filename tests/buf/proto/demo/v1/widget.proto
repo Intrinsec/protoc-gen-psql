@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package demo.v1;
+
+import "psql/psql.proto";
+
+option go_package = "example.com/demo/v1;demov1";
+
+message Widget {
+    option (psql.tableType) = DATA;
+
+    string uuid = 1 [
+        (psql.column) = "uuid PRIMARY KEY DEFAULT gen_random_uuid()"
+    ];
+
+    string label = 2 [
+        (psql.column) = "text NOT NULL"
+    ];
+}
+
+// Annotation-free: must NOT emit any stderr line and must NOT generate output.
+message Plain {
+    string note = 1;
+}
