@@ -3,3 +3,7 @@ dist/
 *.pb.psql
 !tests/references/**/*.pb.psql
 tests/**/*.pb.go
+# buf regression fixture (Issue 2): keep references, ignore generated output + staged extension copy
+!tests/buf/references/**/*.pb.psql
+tests/buf/gen/
+tests/buf/proto/psql/
