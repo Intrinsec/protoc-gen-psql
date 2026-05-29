@@ -68,12 +68,15 @@ test-buf-generate: build
 			echo "FAIL: skip-message noise leaked to stderr (Issue 1 regression)"; exit 1; \
 		fi; \
 		test $$status -eq 0 || { echo "FAIL: buf generate exited $$status"; exit $$status; }
-	# Checking diff between generated file and reference file (empty == identical)
-	@for i in `find tests/buf/gen -name '*.pb.psql' | sort`; do \
-		rel=$${i#tests/buf/}; \
-		diff tests/buf/references/$$rel $$i || { echo "FAIL: $$i differs from reference (source-relative regression)"; exit 1; }; \
+	# Checking every reference has a byte-identical generated counterpart at its
+	# nested (source-relative) path. Iterating references — not generated files —
+	# so a dropped output fails loudly instead of passing trivially.
+	@for ref in `find tests/buf/references -name '*.pb.psql' | sort`; do \
+		rel=$${ref#tests/buf/references/}; \
+		gen=tests/buf/$$rel; \
+		test -f $$gen || { echo "FAIL: expected source-relative output $$gen missing"; exit 1; }; \
+		diff $$ref $$gen || { echo "FAIL: $$gen differs from reference (source-relative regression)"; exit 1; }; \
 	done
-	@test -f tests/buf/gen/demo/v1/10_tables_widget.pb.psql || { echo "FAIL: expected nested source-relative output missing"; exit 1; }
 	@rm -f tests/buf/buf.gen.local.yaml tests/buf/buf.stderr.txt
 	@echo "test-buf-generate OK"
 
