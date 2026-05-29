@@ -45,7 +45,7 @@ vendor:
 	@go mod vendor
 
 
-PROTO_FIXTURES := $(sort $(shell find tests -name '*.proto'))
+PROTO_FIXTURES := $(sort $(shell find tests -name '*.proto' -not -path 'tests/buf/*'))
 
 .PHONY: test-generate
 test-generate: build
@@ -57,6 +57,25 @@ test-generate: build
 		rel=$${i#tests/}; \
 		diff tests/references/$$rel $$i; \
 	done
+
+.PHONY: test-buf-generate
+test-buf-generate: build
+	@mkdir -p tests/buf/proto/psql && cp -f $(NAME)/$(NAME).proto tests/buf/proto/psql/$(NAME).proto
+	@sed 's#PSQL_BIN_PLACEHOLDER#$(shell pwd)/bin/protoc-gen-$(NAME)#' tests/buf/buf.gen.yaml > tests/buf/buf.gen.local.yaml
+	@cd tests/buf && rm -rf gen && buf generate proto --template buf.gen.local.yaml 2>buf.stderr.txt; status=$$?; \
+		cat buf.stderr.txt; \
+		if grep -q "Unable to find an extension tableType" buf.stderr.txt; then \
+			echo "FAIL: skip-message noise leaked to stderr (Issue 1 regression)"; exit 1; \
+		fi; \
+		test $$status -eq 0 || { echo "FAIL: buf generate exited $$status"; exit $$status; }
+	# Checking diff between generated file and reference file (empty == identical)
+	@for i in `find tests/buf/gen -name '*.pb.psql' | sort`; do \
+		rel=$${i#tests/buf/}; \
+		diff tests/buf/references/$$rel $$i || { echo "FAIL: $$i differs from reference (source-relative regression)"; exit 1; }; \
+	done
+	@test -f tests/buf/gen/demo/v1/10_tables_widget.pb.psql || { echo "FAIL: expected nested source-relative output missing"; exit 1; }
+	@rm -f tests/buf/buf.gen.local.yaml tests/buf/buf.stderr.txt
+	@echo "test-buf-generate OK"
 
 
 # `docker-compose` (v1, hyphenated) is reaching EOL; prefer `docker compose`
@@ -75,12 +94,13 @@ test-integration: build
 
 
 .PHONY: test
-test: build test-generate test-integration
+test: build test-generate test-buf-generate test-integration
 
 
 .PHONY: clean
 clean:
 	@rm -fv tests/*.psql
+	@rm -rf tests/buf/gen tests/buf/buf.gen.local.yaml tests/buf/buf.stderr.txt tests/buf/proto/psql
 
 
 .PHONY: distclean
