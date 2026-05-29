@@ -74,6 +74,8 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
       - name: Install buf
+        env:
+          GOFLAGS: ""
         run: go install github.com/bufbuild/buf/cmd/buf@v1.50.0
       - name: make test-buf-generate
         run: make test-buf-generate
