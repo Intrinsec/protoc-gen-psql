@@ -7,9 +7,10 @@
 #   build       -> compile bin/protoc-gen-psql
 #
 # Notes:
-# - Go version pinned to match go.mod (currently 1.25). Bump in lockstep
-#   with go.mod and .pre-commit-config.yaml.
-# - golangci-lint version pinned to match local toolchain.
+# - Go version pinned to match go.mod (currently 1.27.3). Bump in lockstep
+#   with go.mod, .github/workflows/ci.yml and the Makefile.
+# - Tool versions pinned; keep in sync with .github/workflows/ci.yml, the
+#   Makefile and .pre-commit-config.yaml.
 # - All Go jobs use -mod=vendor so they do not download modules at CI time.
 
 stages:
@@ -20,8 +21,11 @@ stages:
   - supply-chain
 
 variables:
-  GO_VERSION: "1.26"
-  GOLANGCI_LINT_VERSION: "v2.12.2"
+  GO_VERSION: "1.27.3"
+  GOLANGCI_LINT_VERSION: "v2.15.0"
+  GOVULNCHECK_VERSION: "v1.9.0"
+  CYCLONEDX_GOMOD_VERSION: "v1.12.0"
+  GO_LICENSES_VERSION: "v2.0.1"
   GOFLAGS: "-mod=vendor"
   GOCACHE: "${CI_PROJECT_DIR}/.cache/go-build"
   GOMODCACHE: "${CI_PROJECT_DIR}/.cache/go-mod"
@@ -87,7 +91,7 @@ test-integration:
 govulncheck:
   stage: vuln
   script:
-    - GOFLAGS= go install golang.org/x/vuln/cmd/govulncheck@latest
+    - GOFLAGS= go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}
     - govulncheck ./...
 
 # ---- build ----
@@ -106,7 +110,7 @@ build:
 sbom:
   stage: supply-chain
   script:
-    - GOFLAGS= go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest
+    - GOFLAGS= go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@${CYCLONEDX_GOMOD_VERSION}
     - cyclonedx-gomod mod -licenses -json -output sbom.cdx.json
   artifacts:
     paths:
@@ -116,7 +120,7 @@ sbom:
 license-check:
   stage: supply-chain
   script:
-    - GOFLAGS= go install github.com/google/go-licenses@latest
+    - GOFLAGS= go install github.com/google/go-licenses/v2@${GO_LICENSES_VERSION}
     - go-licenses csv ./... > licenses.csv
     - go-licenses check ./... --allowed_licenses="Apache-2.0,BSD-2-Clause,BSD-3-Clause,MIT,ISC,MPL-2.0"
   artifacts:

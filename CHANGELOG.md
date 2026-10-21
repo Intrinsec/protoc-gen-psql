@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Refreshed third-party dependencies and pinned the Go toolchain (1.27.3) and
+  all build, lint and release tools to exact versions. Patched 4 known
+  vulnerabilities in dependencies (none were reachable from the plugin).
+
 ## [0.1.0] - 2026-05-29
 
 Quieter `buf generate` output and regression coverage for source-relative
