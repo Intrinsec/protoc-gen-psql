@@ -74,10 +74,10 @@ test-generate: build
 	@find tests -name '*.pb.psql' -not -path 'tests/references/*' -not -path 'tests/buf/*' -exec cat {} \;
 	# Checking diff between generated file and reference file
 	# If the following is empty then the file are identical
-	@for i in `find tests -name '*.pb.psql' -not -path 'tests/references/*' -not -path 'tests/buf/*' | sort`; do \
+	@rc=0; for i in `find tests -name '*.pb.psql' -not -path 'tests/references/*' -not -path 'tests/buf/*' | sort`; do \
 		rel=$${i#tests/}; \
-		diff tests/references/$$rel $$i; \
-	done
+		diff tests/references/$$rel $$i || { echo "FAIL: $$i differs from tests/references/$$rel"; rc=1; }; \
+	done; exit $$rc
 
 .PHONY: test-buf-generate
 test-buf-generate: build

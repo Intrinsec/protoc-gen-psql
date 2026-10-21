@@ -7,7 +7,11 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      # Generator reference outputs must stay byte-identical to what the
+      # plugin emits (templates contain whitespace-only lines).
       - id: end-of-file-fixer
+        exclude: ^tests/(buf/)?references/
       - id: trailing-whitespace
+        exclude: ^tests/(buf/)?references/
       - id: check-yaml
       - id: check-merge-conflict

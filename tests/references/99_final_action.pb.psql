@@ -211,7 +211,7 @@ BEGIN
 				WHERE
 					%3$I = ANY(ARRAY(SELECT incident_uuid FROM EntityAction WHERE action_uuid = OLD.%1$I)::uuid[]);
 			END IF;
-
+			
 			IF TG_OP IN ('INSERT', 'UPDATE') THEN
 				UPDATE
 					%2$I
@@ -311,7 +311,7 @@ BEGIN
 				WHERE
 					%3$I = ANY(ARRAY(SELECT communication_uuid FROM EntityAction WHERE action_uuid = OLD.%1$I)::uuid[]);
 			END IF;
-
+			
 			IF TG_OP IN ('INSERT', 'UPDATE') THEN
 				UPDATE
 					%2$I
@@ -360,7 +360,7 @@ BEGIN
 		kcu.table_name = lower('EntityAction')
 		AND kcu.constraint_name LIKE '%_fkey'
 		AND kcu.column_name = 'incident_uuid';
-
+	
 	EXECUTE FORMAT($format_function$
 		CREATE OR REPLACE FUNCTION fn_cascade_related_entityaction_incident_uuid_8af60a6d()
 			RETURNS trigger
@@ -380,7 +380,7 @@ BEGIN
 				WHERE
 					%2$I = OLD.incident_uuid;
 			END IF;
-
+			
 			IF TG_OP IN ('INSERT', 'UPDATE') THEN
 				UPDATE
 					%1$I
@@ -403,7 +403,7 @@ BEGIN
 		AFTER INSERT OR UPDATE ON EntityAction
 		FOR EACH ROW
 		EXECUTE FUNCTION fn_cascade_related_entityaction_incident_uuid_8af60a6d();
-
+	
 	CREATE CONSTRAINT TRIGGER tg_del_cascade_related_entityaction_incident_uuid_8af60a6d
 		AFTER DELETE ON EntityAction
 		DEFERRABLE INITIALLY DEFERRED
@@ -436,7 +436,7 @@ BEGIN
 		kcu.table_name = lower('EntityAction')
 		AND kcu.constraint_name LIKE '%_fkey'
 		AND kcu.column_name = 'communication_uuid';
-
+	
 	EXECUTE FORMAT($format_function$
 		CREATE OR REPLACE FUNCTION fn_cascade_related_entityaction_communication_u_c6590c95()
 			RETURNS trigger
@@ -455,7 +455,7 @@ BEGIN
 					update_time = 10
 				WHERE
 					%2$I = OLD.communication_uuid;
-
+			
 				UPDATE
 					%1$I
 				SET
@@ -463,7 +463,7 @@ BEGIN
 				WHERE
 					%2$I = OLD.communication_uuid;
 			END IF;
-
+			
 			IF TG_OP IN ('INSERT', 'UPDATE') THEN
 				UPDATE
 					%1$I
@@ -471,7 +471,7 @@ BEGIN
 					update_time = 10
 				WHERE
 					%2$I = NEW.communication_uuid;
-
+			
 				UPDATE
 					%1$I
 				SET
@@ -493,7 +493,7 @@ BEGIN
 		AFTER INSERT OR UPDATE ON EntityAction
 		FOR EACH ROW
 		EXECUTE FUNCTION fn_cascade_related_entityaction_communication_u_c6590c95();
-
+	
 	CREATE CONSTRAINT TRIGGER tg_del_cascade_related_entityaction_communication_u_c6590c95
 		AFTER DELETE ON EntityAction
 		DEFERRABLE INITIALLY DEFERRED
