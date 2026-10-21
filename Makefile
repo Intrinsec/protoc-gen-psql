@@ -8,6 +8,15 @@ SHELL := /bin/bash
 CI_JOB_ID ?= local
 export CI_JOB_ID
 
+# Pinned tool versions (Go itself is pinned by the `go` directive in go.mod).
+# Keep in sync with .github/workflows/ci.yml and .gitlab-ci.yml.
+GOLANGCI_LINT_VERSION := v2.15.0
+GOVULNCHECK_VERSION := v1.9.0
+BUF_VERSION := v1.74.0
+CYCLONEDX_GOMOD_VERSION := v1.12.0
+GO_LICENSES_VERSION := v2.0.1
+GORELEASER_VERSION := v2.18.3
+
 # protoc-gen-go import remap for the local psql package.
 # Well-known types resolve via google.golang.org/protobuf/types/* by default —
 # no M-mappings required.
@@ -39,6 +48,18 @@ bin/protoc-gen-go:
 bin/protoc-gen-$(NAME): $(NAME)/$(NAME).pb.go $(wildcard *.go)
 	@GOBIN=$(shell pwd)/bin go install -mod=vendor .
 
+.PHONY: tools
+tools:
+	@GOFLAGS= GOBIN=$(shell pwd)/bin go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	@GOFLAGS= GOBIN=$(shell pwd)/bin go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
+	@GOFLAGS= GOBIN=$(shell pwd)/bin go install github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION)
+	@GOFLAGS= GOBIN=$(shell pwd)/bin go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@$(CYCLONEDX_GOMOD_VERSION)
+	@GOFLAGS= GOBIN=$(shell pwd)/bin go install github.com/google/go-licenses/v2@$(GO_LICENSES_VERSION)
+
+.PHONY: tools-release
+tools-release:
+	@GOFLAGS= GOBIN=$(shell pwd)/bin go install github.com/goreleaser/goreleaser/v2@$(GORELEASER_VERSION)
+
 .PHONY: vendor
 vendor:
 	@go mod tidy
@@ -53,10 +74,10 @@ test-generate: build
 	@find tests -name '*.pb.psql' -not -path 'tests/references/*' -not -path 'tests/buf/*' -exec cat {} \;
 	# Checking diff between generated file and reference file
 	# If the following is empty then the file are identical
-	@for i in `find tests -name '*.pb.psql' -not -path 'tests/references/*' -not -path 'tests/buf/*' | sort`; do \
+	@rc=0; for i in `find tests -name '*.pb.psql' -not -path 'tests/references/*' -not -path 'tests/buf/*' | sort`; do \
 		rel=$${i#tests/}; \
-		diff tests/references/$$rel $$i; \
-	done
+		diff tests/references/$$rel $$i || { echo "FAIL: $$i differs from tests/references/$$rel"; rc=1; }; \
+	done; exit $$rc
 
 .PHONY: test-buf-generate
 test-buf-generate: build
@@ -108,4 +129,4 @@ clean:
 
 .PHONY: distclean
 distclean: clean
-	@rm -fv bin/protoc-gen-go bin/protoc-gen-$(NAME) $(NAME)/$(NAME).pb.go
+	@rm -fv bin/protoc-gen-go bin/protoc-gen-$(NAME) bin/golangci-lint bin/govulncheck bin/buf bin/cyclonedx-gomod bin/go-licenses bin/goreleaser $(NAME)/$(NAME).pb.go

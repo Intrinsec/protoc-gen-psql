@@ -6,7 +6,7 @@ Operational contract for AI agents (Claude Code, Copilot, Gemini) and human cont
 - **Type**: 2 — Go CLI (`protoc` plugin binary)
 - **Module**: `github.com/intrinsec/protoc-gen-psql`
 - **Purpose**: generate PostgreSQL DDL files from protobuf message definitions
-- **Go**: `go 1.25.0` directive, `toolchain go1.26.3`. Entry point `main.go` registers `PSQLify()` against `protoc-gen-star`. Build artifact: `bin/protoc-gen-psql`.
+- **Go**: `go 1.27.3` directive, pinned exactly in CI (`GO_VERSION`). Tool versions pinned in `Makefile` + both CI files (`make tools`). Entry point `main.go` registers `PSQLify()` against `protoc-gen-star`. Build artifact: `bin/protoc-gen-psql`.
 
 ## Language
 

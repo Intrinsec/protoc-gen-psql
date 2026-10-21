@@ -7,13 +7,13 @@ For cascade-trigger design rationale see `docs/dev.md`.
 
 ## Prerequisites
 
-| Tool | Minimum | Install |
+| Tool | Version | Install |
 |------|---------|---------|
-| Go | matches `go.mod` (currently `go 1.25` directive, `toolchain go1.26.3`) | https://go.dev/dl/ |
+| Go | `1.27.3`, pinned by `go.mod` and `GO_VERSION` in both CI files | https://go.dev/dl/ |
 | `protoc` | 3.20 | `apt install protobuf-compiler` or `brew install protobuf` |
 | Docker + Compose v2 | 24.x | https://docs.docker.com/engine/install/ |
-| `golangci-lint` | 2.10.1 | https://golangci-lint.run/usage/install/ |
-| `govulncheck` | v1.2.0 | `go install golang.org/x/vuln/cmd/govulncheck@latest` |
+| `golangci-lint`, `govulncheck`, `buf`, `cyclonedx-gomod`, `go-licenses` | pinned in `Makefile` (same values as CI) | `make tools` (installs into `bin/`) |
+| `goreleaser` | pinned in `Makefile` | `make tools-release` |
 | `pre-commit` (optional) | 3.x | `pip install pre-commit && pre-commit install` |
 
 ## Build
@@ -120,4 +120,5 @@ Re-evaluate when binaries ship beyond internal CI.
 | `bin/protoc-gen-go` install fails | offline / GOPROXY unreachable | enable network, or use vendored deps with `-mod=vendor` |
 | Integration tests hang | leftover containers from previous run | `docker compose -p psql-local -f tests/docker-compose.tests.yml down -v` |
 | `golangci-lint` reports unexpected issues | version mismatch with `.golangci.yml` schema | reinstall matching version (config pins schema `version: "2"`) |
+| `make tools-release` fails with `checksum mismatch` on `github.com/anchore/go-macholibre` | `GOPROXY=direct` rebuilds the zip from GitHub, which no longer matches `sum.golang.org` | keep the checksum database on; `GOPROXY=https://proxy.golang.org,direct make tools-release` |
 | `make test-generate` diff non-empty after small refactor | reference file out of date or behaviour regression | inspect diff; update `tests/references/` only if change is intentional |
