@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-21
+
 ### Changed
 
 - Refreshed third-party dependencies and pinned the Go toolchain (1.27.3) and
@@ -162,7 +164,9 @@ behavioural change to the generated PostgreSQL output.
 - All Go-module CVEs reported against earlier dependency versions cleared
   by the dep refresh.
 
-[Unreleased]: https://github.com/Intrinsec/protoc-gen-psql/compare/v0.0.13...HEAD
+[Unreleased]: https://github.com/Intrinsec/protoc-gen-psql/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/Intrinsec/protoc-gen-psql/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/Intrinsec/protoc-gen-psql/compare/v0.0.13...v0.1.0
 [0.0.13]: https://github.com/Intrinsec/protoc-gen-psql/compare/v0.0.12...v0.0.13
 [0.0.12]: https://github.com/Intrinsec/protoc-gen-psql/compare/v0.0.11...v0.0.12
 [0.0.11]: https://github.com/Intrinsec/protoc-gen-psql/compare/v0.0.10...v0.0.11
